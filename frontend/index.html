@@ -1,43 +1,51 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Uber Clone Test</title>
+  <title>Uber Clone Debug</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: Arial;
       padding: 20px;
     }
 
     .status {
       font-size: 18px;
-      margin-bottom: 20px;
+      margin-bottom: 10px;
     }
 
     button {
-      padding: 10px 15px;
-      margin-top: 10px;
+      padding: 10px;
+      margin: 5px 0;
       cursor: pointer;
     }
 
     pre {
-      background: #f4f4f4;
+      background: #111;
+      color: #0f0;
       padding: 10px;
-      margin-top: 20px;
+      height: 300px;
+      overflow: auto;
+    }
+
+    .box {
+      margin-bottom: 20px;
     }
   </style>
 </head>
 
 <body>
 
-  <h1>Uber Clone Frontend</h1>
+  <h1>Uber Clone Debug Mode</h1>
 
-  <div class="status" id="status">Checking backend...</div>
+  <div class="box">
+    <div id="status" class="status">⏳ Starting...</div>
+    <button onclick="checkBackend()">Check Backend</button>
+    <button onclick="createRide()">Create Ride</button>
+  </div>
 
-  <button onclick="createRide()">Create Ride</button>
-
-  <pre id="output"></pre>
+  <h3>Debug Console:</h3>
+  <pre id="log"></pre>
 
   <script src="app.js"></script>
-
 </body>
 </html>
