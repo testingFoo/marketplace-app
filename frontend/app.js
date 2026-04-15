@@ -17,8 +17,13 @@ function checkBackend() {
   fetch(`${API}/api/health`)
     .then(res => res.json())
     .then(data => {
-      setStatus("🟢 Backend Connected");
-      log("✅ Health: " + JSON.stringify(data));
+      const backendStatus = data.status === "ok" ? "🟢 Backend OK" : "🔴 Backend Error";
+      const dbStatus = data.db === "connected" ? "🟢 DB Connected" : "🔴 DB Disconnected";
+
+      setStatus(`${backendStatus} | ${dbStatus}`);
+
+      log("✅ Health response:");
+      log(JSON.stringify(data, null, 2));
     })
     .catch(err => {
       setStatus("🔴 Backend Failed");
