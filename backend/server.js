@@ -8,7 +8,7 @@ app.use(express.json());
 
 // CORS (safe for now, tighten later when using Vercel domain)
 app.use(cors({
-  origin: "*"
+  origin: "https://marketplace-app-kohl.vercel.app/"
 }));
 
 // PORT for Render
