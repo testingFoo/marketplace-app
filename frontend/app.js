@@ -1,35 +1,57 @@
 const API = "https://marketplace-app-m8ac.onrender.com";
 
+function log(msg) {
+  const el = document.getElementById("log");
+  el.innerText += "\n" + msg;
+  console.log(msg);
+}
+
+function setStatus(msg) {
+  document.getElementById("status").innerText = msg;
+}
+
 // Check backend
 function checkBackend() {
+  log("➡️ Checking backend...");
+
   fetch(`${API}/api/health`)
     .then(res => res.json())
-    .then(() => {
-      document.getElementById("status").innerText =
-        "🟢 Connected to backend";
+    .then(data => {
+      setStatus("🟢 Backend Connected");
+      log("✅ Health: " + JSON.stringify(data));
     })
-    .catch(() => {
-      document.getElementById("status").innerText =
-        "🔴 Backend not connected";
+    .catch(err => {
+      setStatus("🔴 Backend Failed");
+      log("❌ ERROR: " + err);
     });
 }
 
 // Create ride
 function createRide() {
+  log("➡️ Creating ride...");
+
   fetch(`${API}/api/ride`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify({
-      pickup: "Location A",
-      destination: "Location B"
+      pickup: "Debug Location A",
+      destination: "Debug Location B"
     })
   })
   .then(res => res.json())
-  .then(() => loadRides());
+  .then(data => {
+    log("✅ Ride created: " + JSON.stringify(data));
+    loadRides();
+  })
+  .catch(err => log("❌ Ride error: " + err));
 }
 
 // Load rides
 function loadRides() {
+  log("➡️ Loading rides...");
+
   fetch(`${API}/api/rides`)
     .then(res => res.json())
     .then(data => {
@@ -54,18 +76,29 @@ function loadRides() {
 
         container.appendChild(div);
       });
-    });
+
+      log(`✅ Loaded ${data.length} rides`);
+    })
+    .catch(err => log("❌ Load error: " + err));
 }
 
 // Update ride status
 function updateStatus(id, status) {
+  log(`➡️ Updating ${id} → ${status}`);
+
   fetch(`${API}/api/ride/${id}/status`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify({ status })
   })
   .then(res => res.json())
-  .then(() => loadRides());
+  .then(data => {
+    log("✅ Updated: " + JSON.stringify(data));
+    loadRides();
+  })
+  .catch(err => log("❌ Update error: " + err));
 }
 
 // Init
