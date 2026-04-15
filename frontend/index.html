@@ -1,19 +1,43 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Uber Clone</title>
+  <title>Uber Clone Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+
+    .status {
+      font-size: 18px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      padding: 10px 15px;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+
+    pre {
+      background: #f4f4f4;
+      padding: 10px;
+      margin-top: 20px;
+    }
+  </style>
 </head>
+
 <body>
 
-<h1>Uber App</h1>
+  <h1>Uber Clone Frontend</h1>
 
-<input id="pickup" placeholder="Pickup" />
-<input id="destination" placeholder="Destination" />
+  <div class="status" id="status">Checking backend...</div>
 
-<button onclick="bookRide()">Book Ride</button>
+  <button onclick="createRide()">Create Ride</button>
 
-<h3 id="status"></h3>
+  <pre id="output"></pre>
 
-<script src="script.js"></script>
+  <script src="app.js"></script>
+
 </body>
 </html>
