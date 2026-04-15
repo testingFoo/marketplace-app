@@ -3,17 +3,17 @@ const API = "https://marketplace-app-m8ac.onrender.com";
 
 // 1. Check backend connection
 function checkBackend() {
-  fetch(`${API}/api/health`)
-    .then(res => res.json())
-    .then(data => {
+  fetch("https://marketplace-app-m8ac.onrender.com/api/health")
+    .then(async (res) => {
+      const data = await res.json();
       document.getElementById("status").innerText =
         "🟢 Connected to Render backend";
       console.log("Health:", data);
     })
-    .catch(err => {
+    .catch((err) => {
       document.getElementById("status").innerText =
         "🔴 Backend NOT connected";
-      console.error(err);
+      console.error("Backend error:", err);
     });
 }
 
