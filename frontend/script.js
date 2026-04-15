@@ -1,5 +1,5 @@
 // IMPORTANT: replace with your Render URL
-const API_URL = "https://YOUR-RENDER-APP.onrender.com";
+const API_URL = "https://marketplace-app-m8ac.onrender.com";
 
 async function bookRide() {
   const pickup = document.getElementById("pickup").value;
