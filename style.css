@@ -1,0 +1,19 @@
+body {
+  font-family: Arial;
+  padding: 20px;
+}
+
+#products {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+}
+
+.product {
+  border: 1px solid #ccc;
+  padding: 10px;
+}
+
+button {
+  margin-top: 10px;
+}
