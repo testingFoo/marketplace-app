@@ -14,8 +14,8 @@
     }
 
     button {
-      padding: 10px;
-      margin: 5px 0;
+      padding: 8px 12px;
+      margin: 3px;
       cursor: pointer;
     }
 
@@ -23,27 +23,38 @@
       background: #111;
       color: #0f0;
       padding: 10px;
-      height: 300px;
+      height: 200px;
       overflow: auto;
     }
 
     .box {
       margin-bottom: 20px;
     }
+
+    .ride {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 
 <body>
 
-  <h1>Uber Clone Debug Mode</h1>
+  <h1>🚗 Uber Clone Debug Dashboard</h1>
 
   <div class="box">
     <div id="status" class="status">⏳ Starting...</div>
+
     <button onclick="checkBackend()">Check Backend</button>
     <button onclick="createRide()">Create Ride</button>
+    <button onclick="loadRides()">Refresh Rides</button>
   </div>
 
-  <h3>Debug Console:</h3>
+  <h3>🚗 Rides</h3>
+  <div id="rides"></div>
+
+  <h3>🧠 Debug Console</h3>
   <pre id="log"></pre>
 
   <script src="app.js"></script>
