@@ -77,22 +77,23 @@ app.get("/", (req, res) => {
 // Create ride
 app.post("/api/ride", async (req, res) => {
   try {
-    const { pickup, destination } = req.body;
+    const { pickup, destination, userId } = req.body;
 
-    if (!pickup || !destination) {
+    if (!pickup || !destination || !userId) {
       return res.status(400).json({
-        error: "pickup and destination are required"
+        error: "pickup, destination, userId required"
       });
     }
 
     const ride = await Ride.create({
       pickup,
-      destination
+      destination,
+      userId
     });
 
     res.json(ride);
   } catch (err) {
-    console.log("❌ Create Ride Error:", err);
+    console.log("Create Ride Error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
