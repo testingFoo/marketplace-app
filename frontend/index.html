@@ -1,62 +1,33 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Uber Clone Debug</title>
+  <title>Uber Clone Step H</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
   <style>
     body { font-family: Arial; padding: 20px; }
-
-    .status { font-size: 18px; margin-bottom: 10px; }
-
-    button { padding: 8px 12px; margin: 3px; cursor: pointer; }
-
-    input { padding: 8px; width: 250px; margin: 4px 0; }
-
-    pre { background: #111; color: #0f0; padding: 10px; height: 150px; overflow: auto; }
-
-    #map { height: 350px; margin-top: 10px; border: 1px solid #ccc; }
-
-    .ride { border: 1px solid #ccc; padding: 10px; margin-bottom: 8px; }
+    #map { height: 300px; margin-top: 10px; }
+    .ride { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
   </style>
 </head>
 
 <body>
 
-<h1>🚗 Uber Clone Debug</h1>
+<h1>🚗 Uber Clone Step H</h1>
 
-<div id="status">Starting...</div>
-
-<button onclick="checkBackend()">Check Backend</button>
-<button onclick="loadRides()">Refresh</button>
-
-<br><br>
+<div id="modeLabel">Current: RIDER</div>
 
 <button onclick="setMode('rider')">Rider</button>
 <button onclick="setMode('driver')">Driver</button>
-
-<span id="modeLabel">Current: RIDER</span>
-
-<br><br>
-
-<button id="driverToggle" onclick="toggleDriver()">Go ONLINE</button>
-
-<hr>
-
-<h3>Pickup</h3>
-<input id="pickup" placeholder="Search pickup"/>
-<button onclick="handlePickupSearch()">Search</button>
-
-<h3>Drop</h3>
-<input id="destination" placeholder="Search drop"/>
-<button onclick="handleDropSearch()">Search</button>
+<button onclick="toggleDriver()">Toggle Driver</button>
 
 <br><br>
 
+<input id="pickup" placeholder="Pickup">
+<input id="destination" placeholder="Destination">
 <button onclick="createRide()">Create Ride</button>
 
-<h3>Rides</h3>
 <div id="rides"></div>
 
 <h3>Map</h3>
