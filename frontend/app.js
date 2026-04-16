@@ -7,19 +7,21 @@ let mode = "rider";
 let driverOnline = false;
 
 // =====================
-// IDS
+// IDS (stable identity)
 // =====================
-const userId =
-  localStorage.getItem("userId") ||
-  Math.random().toString(36).substring(2, 10);
+let userId = localStorage.getItem("userId");
 
-localStorage.setItem("userId", userId);
+if (!userId) {
+  userId = "user_" + Date.now();
+  localStorage.setItem("userId", userId);
+}
 
-const driverId =
-  localStorage.getItem("driverId") ||
-  Math.random().toString(36).substring(2, 10);
+let driverId = localStorage.getItem("driverId");
 
-localStorage.setItem("driverId", driverId);
+if (!driverId) {
+  driverId = "driver_" + Date.now();
+  localStorage.setItem("driverId", driverId);
+}
 
 // =====================
 // SOCKET
@@ -52,7 +54,7 @@ function initSocket() {
 }
 
 // =====================
-// DOM SAFE INIT
+// DOM ELEMENTS
 // =====================
 let logBox;
 let statusBox;
@@ -80,7 +82,7 @@ function checkBackend() {
     .then(res => res.json())
     .then(data => {
       setStatus(`${data.status} | DB: ${data.db}`);
-      log("📡 Health OK");
+      log("📡 Backend OK");
     })
     .catch(err => {
       setStatus("❌ Backend failed");
@@ -89,12 +91,19 @@ function checkBackend() {
 }
 
 // =====================
-// MODE SWITCH
+// MODE SWITCH (FIXED)
 // =====================
 function setMode(newMode) {
+  console.log("MODE SWITCH:", newMode);
+
   mode = newMode;
-  log("🔁 Mode: " + newMode);
-  loadRides();
+
+  setStatus("Mode: " + mode);
+
+  // 🔥 force safe re-render
+  setTimeout(() => {
+    loadRides();
+  }, 0);
 }
 
 // =====================
@@ -159,7 +168,7 @@ function updateStatus(id, status) {
 }
 
 // =====================
-// LOAD RIDES
+// LOAD RIDES (FIXED RENDER)
 // =====================
 function loadRides() {
   if (!ridesBox) return;
@@ -167,23 +176,35 @@ function loadRides() {
   fetch(`${API}/api/rides`)
     .then(res => res.json())
     .then(data => {
+
+      console.log("ALL RIDES:", data);
+      console.log("MODE:", mode);
+
       ridesBox.innerHTML = "";
+
+      // 🔥 DEBUG HEADER
+      const debug = document.createElement("div");
+      debug.style.padding = "8px";
+      debug.style.background = "#eee";
+      debug.innerText = `MODE: ${mode} | TOTAL RIDES: ${data.length}`;
+      ridesBox.appendChild(debug);
 
       let filtered = data;
 
+      // DRIVER VIEW
       if (mode === "driver") {
         filtered = data.filter(
-          r => r.driverId === driverId || r.status === "REQUESTED"
+          r => r.status === "REQUESTED" || r.driverId === driverId
         );
       }
 
+      // RIDER VIEW
       if (mode === "rider") {
         filtered = data.filter(r => r.userId === userId);
       }
 
       filtered.forEach(r => {
         const div = document.createElement("div");
-
         div.className = "ride";
 
         div.innerHTML = `
@@ -191,9 +212,17 @@ function loadRides() {
           Status: ${r.status}<br/>
           Driver: ${r.driverId || "none"}<br/><br/>
 
-          ${r.status === "ACCEPTED" ? `<button onclick="updateStatus('${r._id}', 'ARRIVING')">Arriving</button>` : ""}
-          ${r.status === "ARRIVING" ? `<button onclick="updateStatus('${r._id}', 'IN_PROGRESS')">Start</button>` : ""}
-          ${r.status === "IN_PROGRESS" ? `<button onclick="updateStatus('${r._id}', 'COMPLETED')">Complete</button>` : ""}
+          ${r.status === "ACCEPTED"
+            ? `<button onclick="updateStatus('${r._id}', 'ARRIVING')">Arriving</button>`
+            : ""}
+
+          ${r.status === "ARRIVING"
+            ? `<button onclick="updateStatus('${r._id}', 'IN_PROGRESS')">Start</button>`
+            : ""}
+
+          ${r.status === "IN_PROGRESS"
+            ? `<button onclick="updateStatus('${r._id}', 'COMPLETED')">Complete</button>`
+            : ""}
         `;
 
         ridesBox.appendChild(div);
@@ -203,7 +232,7 @@ function loadRides() {
 }
 
 // =====================
-// INIT (IMPORTANT FIX)
+// INIT (CRITICAL FIX)
 // =====================
 window.onload = () => {
   logBox = document.getElementById("log");
@@ -223,7 +252,7 @@ window.onload = () => {
 };
 
 // =====================
-// GLOBAL EXPORTS
+// GLOBAL EXPORTS (IMPORTANT)
 // =====================
 window.createRide = createRide;
 window.updateStatus = updateStatus;
