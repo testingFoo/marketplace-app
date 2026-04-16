@@ -147,6 +147,27 @@ function createRide() {
   }).then(loadRides);
 }
 
+function setMode(m) {
+  mode = m;
+  updateModeLabel();
+  loadRides();
+}
+
+function toggleDriver() {
+  driverOnline = !driverOnline;
+
+  if (socket) {
+    if (driverOnline) {
+      socket.emit("driver:online", driverId);
+    } else {
+      socket.emit("driver:offline", driverId);
+    }
+  }
+
+  const btn = document.getElementById("driverToggle");
+  if (btn) btn.innerText = driverOnline ? "Go OFFLINE" : "Go ONLINE";
+}
+
 // =====================
 // LOAD RIDES
 // =====================
