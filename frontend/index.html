@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Uber Clone Step H</title>
-
+  <title>Uber Clone Final</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
   <style>
@@ -14,18 +13,19 @@
 
 <body>
 
-<h1>🚗 Uber Clone Step H</h1>
+<h1>🚗 Uber Clone Final</h1>
 
-<div id="modeLabel">Current: RIDER</div>
+<div id="status">Loading...</div>
 
 <button onclick="setMode('rider')">Rider</button>
 <button onclick="setMode('driver')">Driver</button>
-<button onclick="toggleDriver()">Toggle Driver</button>
+<button id="driverToggle" onclick="toggleDriver()">Go ONLINE</button>
 
 <br><br>
 
 <input id="pickup" placeholder="Pickup">
-<input id="destination" placeholder="Destination">
+<input id="destination" placeholder="Drop">
+
 <button onclick="createRide()">Create Ride</button>
 
 <div id="rides"></div>
