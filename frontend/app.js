@@ -4,6 +4,11 @@ const logBox = document.getElementById("log");
 const statusBox = document.getElementById("status");
 
 // =====================
+// GLOBAL MODE
+// =====================
+let mode = "rider";
+
+// =====================
 // Logger
 // =====================
 function log(msg) {
@@ -11,14 +16,28 @@ function log(msg) {
 }
 
 // =====================
-// Status UI
+// Set Status UI
 // =====================
 function setStatus(msg) {
   statusBox.innerText = msg;
 }
 
 // =====================
-// Check backend
+// Switch Mode (Rider / Driver)
+// =====================
+function setMode(newMode) {
+  mode = newMode;
+
+  document.getElementById("modeLabel").innerText =
+    "Current: " + mode.toUpperCase();
+
+  log("🔄 Mode switched to: " + mode);
+
+  loadRides();
+}
+
+// =====================
+// Check backend + DB
 // =====================
 function checkBackend() {
   log("➡️ Checking backend...");
@@ -26,6 +45,7 @@ function checkBackend() {
   fetch(`${API}/api/health`)
     .then(res => res.json())
     .then(data => {
+
       const backendStatus =
         data.status === "ok" ? "🟢 Backend OK" : "🔴 Backend Error";
 
@@ -36,7 +56,7 @@ function checkBackend() {
 
       setStatus(`${backendStatus} | ${dbStatus}`);
 
-      log("✅ Health:");
+      log("✅ Health response:");
       log(JSON.stringify(data, null, 2));
     })
     .catch(err => {
@@ -49,52 +69,62 @@ function checkBackend() {
 // Create Ride
 // =====================
 function createRide() {
-  const pickup = prompt("Pickup location:");
-  const destination = prompt("Destination:");
+  log("➡️ Creating ride...");
+
+  const pickup = prompt("Enter pickup location:");
+  const destination = prompt("Enter destination:");
 
   if (!pickup || !destination) {
-    log("⚠️ Missing data");
+    log("⚠️ Missing pickup or destination");
     return;
   }
 
-  log("➡️ Creating ride...");
-
   fetch(`${API}/api/ride`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify({ pickup, destination })
   })
     .then(res => res.json())
     .then(data => {
       log("✅ Ride created:");
       log(JSON.stringify(data, null, 2));
+
       loadRides();
     })
-    .catch(err => log("❌ Create error: " + err));
+    .catch(err => {
+      log("❌ Create ride error: " + err);
+    });
 }
 
 // =====================
-// Update Ride Status
+// Update Ride Status (Driver only action)
 // =====================
 function updateStatus(id, status) {
   log(`➡️ Updating ride ${id} → ${status}`);
 
   fetch(`${API}/api/ride/${id}/status`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify({ status })
   })
     .then(res => res.json())
     .then(data => {
       log("✅ Status updated:");
       log(JSON.stringify(data, null, 2));
+
       loadRides();
     })
-    .catch(err => log("❌ Status update error: " + err));
+    .catch(err => {
+      log("❌ Status update error: " + err);
+    });
 }
 
 // =====================
-// Load rides (UI version)
+// Load Rides (Role-based UI)
 // =====================
 function loadRides() {
   log("➡️ Loading rides...");
@@ -103,28 +133,37 @@ function loadRides() {
     .then(res => res.json())
     .then(data => {
       const container = document.getElementById("rides");
+      container.innerHTML = "";
 
       if (!Array.isArray(data)) {
         log("❌ Invalid response");
         return;
       }
 
-      container.innerHTML = "";
-
       data.forEach(r => {
         const div = document.createElement("div");
+        div.className = "ride";
 
-        div.style.border = "1px solid #ccc";
-        div.style.padding = "10px";
-        div.style.margin = "10px 0";
+        let buttons = "";
+
+        // 🚗 DRIVER VIEW (can control status)
+        if (mode === "driver") {
+          buttons = `
+            <button onclick="updateStatus('${r._id}', 'ACCEPTED')">Accept</button>
+            <button onclick="updateStatus('${r._id}', 'ARRIVING')">Arriving</button>
+            <button onclick="updateStatus('${r._id}', 'COMPLETED')">Complete</button>
+          `;
+        }
+
+        // 👤 RIDER VIEW (read-only)
+        if (mode === "rider") {
+          buttons = `<small>👤 Waiting for driver...</small>`;
+        }
 
         div.innerHTML = `
           <b>🚗 ${r.pickup} → ${r.destination}</b><br/>
           <b>Status:</b> ${r.status}<br/><br/>
-
-          <button onclick="updateStatus('${r._id}', 'ACCEPTED')">Accept</button>
-          <button onclick="updateStatus('${r._id}', 'ARRIVING')">Arriving</button>
-          <button onclick="updateStatus('${r._id}', 'COMPLETED')">Complete</button>
+          ${buttons}
         `;
 
         container.appendChild(div);
@@ -132,11 +171,13 @@ function loadRides() {
 
       log(`📦 Rides loaded: ${data.length}`);
     })
-    .catch(err => log("❌ Load error: " + err));
+    .catch(err => {
+      log("❌ Load error: " + err);
+    });
 }
 
 // =====================
-// Init
+// Auto start
 // =====================
 checkBackend();
 loadRides();
