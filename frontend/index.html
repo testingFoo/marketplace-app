@@ -3,127 +3,71 @@
 <head>
   <title>Uber Clone Debug</title>
 
-  <!-- LEAFLET -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
   <style>
-    body {
-      font-family: Arial;
-      padding: 20px;
-    }
+    body { font-family: Arial; padding: 20px; }
 
-    .status {
-      font-size: 18px;
-      margin-bottom: 10px;
-    }
+    .status { font-size: 18px; margin-bottom: 10px; }
 
-    button {
-      padding: 8px 12px;
-      margin: 3px;
-      cursor: pointer;
-    }
+    button { padding: 8px 12px; margin: 3px; cursor: pointer; }
 
-    input {
-      padding: 8px;
-      width: 250px;
-      margin: 4px 0;
-    }
+    input { padding: 8px; width: 250px; margin: 4px 0; }
 
-    pre {
-      background: #111;
-      color: #0f0;
-      padding: 10px;
-      height: 200px;
-      overflow: auto;
-    }
+    pre { background: #111; color: #0f0; padding: 10px; height: 150px; overflow: auto; }
 
-    .box {
-      margin-bottom: 20px;
-    }
+    #map { height: 350px; margin-top: 10px; border: 1px solid #ccc; }
 
-    .ride {
-      border: 1px solid #ccc;
-      padding: 10px;
-      margin-bottom: 10px;
-    }
-
-    .modeBox {
-      margin-top: 10px;
-      padding: 10px;
-      border: 1px dashed #999;
-    }
-
-    #map {
-      height: 350px;
-      width: 100%;
-      margin-top: 10px;
-      border: 1px solid #ccc;
-    }
+    .ride { border: 1px solid #ccc; padding: 10px; margin-bottom: 8px; }
   </style>
 </head>
 
 <body>
 
-  <h1>🚗 Uber Clone Debug Dashboard</h1>
+<h1>🚗 Uber Clone Debug</h1>
 
-  <!-- STATUS -->
-  <div class="box">
-    <div id="status" class="status">⏳ Starting...</div>
+<div id="status">Starting...</div>
 
-    <button onclick="checkBackend()">Check Backend</button>
-    <button onclick="loadRides()">Refresh Rides</button>
-  </div>
+<button onclick="checkBackend()">Check Backend</button>
+<button onclick="loadRides()">Refresh</button>
 
-  <!-- MODE SWITCH -->
-  <div class="modeBox">
-    <b>Mode:</b>
+<br><br>
 
-    <button onclick="setMode('rider')">👤 Rider</button>
-    <button onclick="setMode('driver')">🚗 Driver</button>
+<button onclick="setMode('rider')">Rider</button>
+<button onclick="setMode('driver')">Driver</button>
 
-    <br><br>
+<span id="modeLabel">Current: RIDER</span>
 
-    <span id="modeLabel">Current: RIDER</span>
+<br><br>
 
-    <br><br>
+<button id="driverToggle" onclick="toggleDriver()">Go ONLINE</button>
 
-    <button id="driverToggle" onclick="toggleDriver()">Go ONLINE</button>
-  </div>
+<hr>
 
-  <!-- ADDRESS INPUTS (STEP G FEATURE) -->
-  <h3>📍 Pickup</h3>
-  <input id="pickup" placeholder="Search pickup address..." />
-  <button onclick="handlePickupSearch()">Search</button>
+<h3>Pickup</h3>
+<input id="pickup" placeholder="Search pickup"/>
+<button onclick="handlePickupSearch()">Search</button>
 
-  <h3>📍 Destination</h3>
-  <input id="destination" placeholder="Search destination address..." />
-  <button onclick="handleDropSearch()">Search</button>
+<h3>Drop</h3>
+<input id="destination" placeholder="Search drop"/>
+<button onclick="handleDropSearch()">Search</button>
 
-  <br><br>
+<br><br>
 
-  <button onclick="createRide()">🚗 Create Ride</button>
+<button onclick="createRide()">Create Ride</button>
 
-  <!-- RIDES -->
-  <h3>🚗 Rides</h3>
-  <div id="rides"></div>
+<h3>Rides</h3>
+<div id="rides"></div>
 
-  <!-- MAP -->
-  <h3>🗺️ Live Map</h3>
-  <div id="map"></div>
+<h3>Map</h3>
+<div id="map"></div>
 
-  <!-- DEBUG -->
-  <h3>🧠 Debug Console</h3>
-  <pre id="log"></pre>
+<h3>Debug</h3>
+<pre id="log"></pre>
 
-  <!-- SCRIPTS -->
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <!-- YOUR APP -->
-  <script src="app.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js"></script>
 
 </body>
 </html>
