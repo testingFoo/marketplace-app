@@ -4,15 +4,32 @@ const mongoose = require("mongoose");
 
 const app = express();
 
-
+// =====================
+// Middleware
+// =====================
 app.use(express.json());
+
+// CORS (your Vercel frontend)
 app.use(cors({
   origin: "https://marketplace-app-kohl.vercel.app"
 }));
 
+// =====================
+// ENV
+// =====================
 const PORT = process.env.PORT || 3000;
+const MONGO_URI = process.env.MONGO_URI;
 
-mongoose.connect(process.env.MONGO_URI)
+// =====================
+// DEBUG (safe)
+// =====================
+console.log("🧠 Server starting...");
+console.log("MONGO_URI exists?", !!MONGO_URI);
+
+// =====================
+// MongoDB Connection
+// =====================
+mongoose.connect(MONGO_URI)
   .then(() => {
     console.log("🟢 MongoDB Connected");
   })
@@ -21,26 +38,14 @@ mongoose.connect(process.env.MONGO_URI)
     console.log(err);
   });
 
-console.log("MONGO_URI =", process.env.MONGO_URI);
-
+// =====================
+// Ride Schema
+// =====================
 const rideSchema = new mongoose.Schema({
-  pickup: {
-    type: String,
-    required: true
-  },
-  destination: {
-    type: String,
-    required: true
-  },
+  pickup: String,
+  destination: String,
   status: {
     type: String,
-    enum: [
-      "REQUESTED",
-      "ACCEPTED",
-      "ARRIVING",
-      "IN_PROGRESS",
-      "COMPLETED"
-    ],
     default: "REQUESTED"
   },
   createdAt: {
@@ -51,7 +56,11 @@ const rideSchema = new mongoose.Schema({
 
 const Ride = mongoose.model("Ride", rideSchema);
 
+// =====================
+// Routes
+// =====================
 
+// Health check
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
@@ -59,20 +68,19 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-
-
+// Root
 app.get("/", (req, res) => {
-  res.send("Uber Backend Running 🚀");
+  res.send("🚀 Uber Clone Backend Running");
 });
 
-
+// Create ride
 app.post("/api/ride", async (req, res) => {
   try {
     const { pickup, destination } = req.body;
 
     if (!pickup || !destination) {
       return res.status(400).json({
-        error: "pickup and destination required"
+        error: "pickup and destination are required"
       });
     }
 
@@ -83,12 +91,23 @@ app.post("/api/ride", async (req, res) => {
 
     res.json(ride);
   } catch (err) {
+    console.log("❌ Create Ride Error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
+// Get all rides
+app.get("/api/rides", async (req, res) => {
+  try {
+    const rides = await Ride.find().sort({ createdAt: -1 });
+    res.json(rides);
+  } catch (err) {
+    console.log("❌ Get Rides Error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
-
+// Update ride status
 app.patch("/api/ride/:id/status", async (req, res) => {
   try {
     const { status } = req.body;
@@ -101,24 +120,14 @@ app.patch("/api/ride/:id/status", async (req, res) => {
 
     res.json(ride);
   } catch (err) {
-    res.status(500).json({ error: "Failed to update status" });
-  }
-});
-
-
-
-
-app.get("/api/rides", async (req, res) => {
-  try {
-    const rides = await Ride.find().sort({ createdAt: -1 });
-    res.json(rides);
-  } catch (err) {
+    console.log("❌ Update Status Error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-
-
+// =====================
+// Start server
+// =====================
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
