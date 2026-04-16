@@ -79,6 +79,19 @@ function setMode(m) {
   loadRides();
 }
 
+function checkBackend() {
+  fetch(`${API}/api/health`)
+    .then(res => res.json())
+    .then(data => {
+      setStatus(`${data.status} | DB: ${data.db}`);
+      log("📡 Backend OK");
+    })
+    .catch(err => {
+      setStatus("❌ Backend failed");
+      log("❌ " + err);
+    });
+}
+
 // =====================
 // MODE LABEL
 // =====================
