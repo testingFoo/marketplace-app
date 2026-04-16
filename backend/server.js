@@ -8,22 +8,20 @@ const app = express();
 const server = http.createServer(app);
 
 // =====================
-// SOCKET.IO SETUP
+// SOCKET.IO (🔥 FIXED CORS)
 // =====================
 const io = new Server(server, {
   cors: {
-    origin: "https://marketplace-app-kohl.vercel.app",
+    origin: "*", // 🔥 allow all (for now)
     methods: ["GET", "POST", "PATCH"]
   }
 });
 
 // =====================
-// MIDDLEWARE
+// MIDDLEWARE (🔥 FIXED CORS)
 // =====================
 app.use(express.json());
-app.use(cors({
-  origin: "https://marketplace-app-kohl.vercel.app"
-}));
+app.use(cors()); // 🔥 allow all (for now)
 
 // =====================
 // ENV
@@ -103,26 +101,38 @@ app.get("/api/health", (req, res) => {
 // CREATE RIDE
 // =====================
 app.post("/api/ride", async (req, res) => {
-  const { pickup, destination, userId } = req.body;
+  try {
+    const { pickup, destination, userId } = req.body;
 
-  const ride = await Ride.create({
-    pickup,
-    destination,
-    userId
-  });
+    const ride = await Ride.create({
+      pickup,
+      destination,
+      userId
+    });
 
-  // 🔥 REAL-TIME EVENT
-  io.emit("ride:new", ride);
+    console.log("🚗 New ride created:", ride._id);
 
-  res.json(ride);
+    // 🔥 REAL-TIME
+    io.emit("ride:new", ride);
+
+    res.json(ride);
+  } catch (err) {
+    console.log("❌ Create ride error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // =====================
 // GET RIDES
 // =====================
 app.get("/api/rides", async (req, res) => {
-  const rides = await Ride.find().sort({ createdAt: -1 });
-  res.json(rides);
+  try {
+    const rides = await Ride.find().sort({ createdAt: -1 });
+    res.json(rides);
+  } catch (err) {
+    console.log("❌ Get rides error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // =====================
@@ -138,7 +148,7 @@ async function driverHasActiveRide(driverId) {
 }
 
 // =====================
-// STATE MACHINE RULES
+// STATE TRANSITIONS
 // =====================
 const validTransitions = {
   REQUESTED: ["ACCEPTED"],
@@ -149,41 +159,52 @@ const validTransitions = {
 };
 
 // =====================
-// UPDATE STATUS (REAL-TIME)
+// UPDATE STATUS
 // =====================
 app.patch("/api/ride/:id/status", async (req, res) => {
-  const { status, driverId } = req.body;
+  try {
+    const { status, driverId } = req.body;
 
-  const ride = await Ride.findById(req.params.id);
+    const ride = await Ride.findById(req.params.id);
 
-  if (!ride) return res.status(404).json({ error: "Ride not found" });
-
-  const current = ride.status;
-
-  if (!validTransitions[current].includes(status)) {
-    return res.status(400).json({ error: "Invalid transition" });
-  }
-
-  if (status === "ACCEPTED") {
-    if (await driverHasActiveRide(driverId)) {
-      return res.status(400).json({ error: "Driver already on trip" });
+    if (!ride) {
+      return res.status(404).json({ error: "Ride not found" });
     }
 
-    ride.driverId = driverId;
+    const current = ride.status;
+
+    if (!validTransitions[current].includes(status)) {
+      return res.status(400).json({ error: "Invalid transition" });
+    }
+
+    // 🚗 Assign driver only when accepting
+    if (status === "ACCEPTED") {
+      if (await driverHasActiveRide(driverId)) {
+        return res.status(400).json({ error: "Driver already on trip" });
+      }
+
+      ride.driverId = driverId;
+    }
+
+    ride.status = status;
+
+    await ride.save();
+
+    console.log(`🔄 Ride ${ride._id} → ${status}`);
+
+    // 🔥 REAL-TIME
+    io.emit("ride:update", ride);
+
+    res.json(ride);
+
+  } catch (err) {
+    console.log("❌ Update error:", err);
+    res.status(500).json({ error: "Server error" });
   }
-
-  ride.status = status;
-
-  await ride.save();
-
-  // 🔥 REAL-TIME UPDATE EVENT
-  io.emit("ride:update", ride);
-
-  res.json(ride);
 });
 
 // =====================
-// START SERVER (IMPORTANT CHANGE)
+// START SERVER
 // =====================
 server.listen(PORT, () => {
   console.log(`🚀 Server running on ${PORT}`);
