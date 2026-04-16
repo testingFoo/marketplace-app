@@ -1,14 +1,26 @@
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const app = express();
+const server = http.createServer(app);
 
 // =====================
-// Middleware
+// SOCKET.IO SETUP
+// =====================
+const io = new Server(server, {
+  cors: {
+    origin: "https://marketplace-app-kohl.vercel.app",
+    methods: ["GET", "POST", "PATCH"]
+  }
+});
+
+// =====================
+// MIDDLEWARE
 // =====================
 app.use(express.json());
-
 app.use(cors({
   origin: "https://marketplace-app-kohl.vercel.app"
 }));
@@ -26,7 +38,7 @@ console.log("🧠 Server booting...");
 console.log("MONGO_URI exists?", !!MONGO_URI);
 
 // =====================
-// MongoDB
+// DB CONNECT
 // =====================
 mongoose.connect(MONGO_URI)
   .then(() => console.log("🟢 MongoDB Connected"))
@@ -36,7 +48,18 @@ mongoose.connect(MONGO_URI)
   });
 
 // =====================
-// TRIP STATE MACHINE
+// SOCKET CONNECTION
+// =====================
+io.on("connection", (socket) => {
+  console.log("🟢 Client connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("🔴 Client disconnected:", socket.id);
+  });
+});
+
+// =====================
+// STATE MACHINE
 // =====================
 const RIDE_STATES = {
   REQUESTED: "REQUESTED",
@@ -47,20 +70,17 @@ const RIDE_STATES = {
 };
 
 // =====================
-// Schema
+// SCHEMA
 // =====================
 const rideSchema = new mongoose.Schema({
   userId: String,
   driverId: String,
-
   pickup: String,
   destination: String,
-
   status: {
     type: String,
     default: RIDE_STATES.REQUESTED
   },
-
   createdAt: {
     type: Date,
     default: Date.now
@@ -70,7 +90,7 @@ const rideSchema = new mongoose.Schema({
 const Ride = mongoose.model("Ride", rideSchema);
 
 // =====================
-// HEALTH CHECK
+// HEALTH
 // =====================
 app.get("/api/health", (req, res) => {
   res.json({
@@ -83,28 +103,18 @@ app.get("/api/health", (req, res) => {
 // CREATE RIDE
 // =====================
 app.post("/api/ride", async (req, res) => {
-  try {
-    const { pickup, destination, userId } = req.body;
+  const { pickup, destination, userId } = req.body;
 
-    console.log("📥 New ride:", req.body);
+  const ride = await Ride.create({
+    pickup,
+    destination,
+    userId
+  });
 
-    if (!pickup || !destination || !userId) {
-      return res.status(400).json({ error: "missing fields" });
-    }
+  // 🔥 REAL-TIME EVENT
+  io.emit("ride:new", ride);
 
-    const ride = await Ride.create({
-      pickup,
-      destination,
-      userId,
-      status: RIDE_STATES.REQUESTED
-    });
-
-    res.json(ride);
-
-  } catch (err) {
-    console.log("❌ Create error:", err);
-    res.status(500).json({ error: "server error" });
-  }
+  res.json(ride);
 });
 
 // =====================
@@ -116,7 +126,7 @@ app.get("/api/rides", async (req, res) => {
 });
 
 // =====================
-// DRIVER ACTIVE CHECK (ONE RIDE ONLY)
+// DRIVER LIMIT CHECK
 // =====================
 async function driverHasActiveRide(driverId) {
   const active = await Ride.findOne({
@@ -139,64 +149,42 @@ const validTransitions = {
 };
 
 // =====================
-// UPDATE RIDE STATUS (CORE ENGINE)
+// UPDATE STATUS (REAL-TIME)
 // =====================
 app.patch("/api/ride/:id/status", async (req, res) => {
-  try {
-    const { status, driverId } = req.body;
+  const { status, driverId } = req.body;
 
-    const ride = await Ride.findById(req.params.id);
+  const ride = await Ride.findById(req.params.id);
 
-    if (!ride) {
-      return res.status(404).json({ error: "Ride not found" });
-    }
+  if (!ride) return res.status(404).json({ error: "Ride not found" });
 
-    const current = ride.status;
+  const current = ride.status;
 
-    console.log(`📌 Transition: ${current} → ${status}`);
-
-    // =====================
-    // VALID STATE CHECK
-    // =====================
-    if (!validTransitions[current].includes(status)) {
-      return res.status(400).json({
-        error: `Invalid transition: ${current} → ${status}`
-      });
-    }
-
-    // =====================
-    // DRIVER ACCEPT RULE
-    // =====================
-    if (status === "ACCEPTED") {
-      if (ride.status !== "REQUESTED") {
-        return res.status(400).json({ error: "Already taken" });
-      }
-
-      if (await driverHasActiveRide(driverId)) {
-        return res.status(400).json({ error: "Driver already on trip" });
-      }
-
-      ride.driverId = driverId;
-    }
-
-    // =====================
-    // STATUS UPDATE
-    // =====================
-    ride.status = status;
-
-    await ride.save();
-
-    res.json(ride);
-
-  } catch (err) {
-    console.log("❌ Update error:", err);
-    res.status(500).json({ error: "server error" });
+  if (!validTransitions[current].includes(status)) {
+    return res.status(400).json({ error: "Invalid transition" });
   }
+
+  if (status === "ACCEPTED") {
+    if (await driverHasActiveRide(driverId)) {
+      return res.status(400).json({ error: "Driver already on trip" });
+    }
+
+    ride.driverId = driverId;
+  }
+
+  ride.status = status;
+
+  await ride.save();
+
+  // 🔥 REAL-TIME UPDATE EVENT
+  io.emit("ride:update", ride);
+
+  res.json(ride);
 });
 
 // =====================
-// START SERVER
+// START SERVER (IMPORTANT CHANGE)
 // =====================
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server running on ${PORT}`);
 });
