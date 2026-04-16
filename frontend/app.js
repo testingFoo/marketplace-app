@@ -11,14 +11,14 @@ function log(msg) {
 }
 
 // =====================
-// Set Status UI
+// Status UI
 // =====================
 function setStatus(msg) {
   statusBox.innerText = msg;
 }
 
 // =====================
-// Check backend + DB (DEBUG READY)
+// Check backend
 // =====================
 function checkBackend() {
   log("➡️ Checking backend...");
@@ -26,7 +26,6 @@ function checkBackend() {
   fetch(`${API}/api/health`)
     .then(res => res.json())
     .then(data => {
-
       const backendStatus =
         data.status === "ok" ? "🟢 Backend OK" : "🔴 Backend Error";
 
@@ -37,7 +36,7 @@ function checkBackend() {
 
       setStatus(`${backendStatus} | ${dbStatus}`);
 
-      log("✅ Health response:");
+      log("✅ Health:");
       log(JSON.stringify(data, null, 2));
     })
     .catch(err => {
@@ -47,40 +46,55 @@ function checkBackend() {
 }
 
 // =====================
-// Create Ride (DEBUG SAFE)
+// Create Ride
 // =====================
 function createRide() {
-  log("➡️ Creating ride...");
-
-  const pickup = prompt("Enter pickup location:");
-  const destination = prompt("Enter destination:");
+  const pickup = prompt("Pickup location:");
+  const destination = prompt("Destination:");
 
   if (!pickup || !destination) {
-    log("⚠️ Missing pickup or destination");
+    log("⚠️ Missing data");
     return;
   }
 
+  log("➡️ Creating ride...");
+
   fetch(`${API}/api/ride`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ pickup, destination })
   })
     .then(res => res.json())
     .then(data => {
       log("✅ Ride created:");
       log(JSON.stringify(data, null, 2));
-
       loadRides();
     })
-    .catch(err => {
-      log("❌ Create ride error: " + err);
-    });
+    .catch(err => log("❌ Create error: " + err));
 }
 
 // =====================
-// Load Rides (DEBUG SAFE)
+// Update Ride Status
+// =====================
+function updateStatus(id, status) {
+  log(`➡️ Updating ride ${id} → ${status}`);
+
+  fetch(`${API}/api/ride/${id}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status })
+  })
+    .then(res => res.json())
+    .then(data => {
+      log("✅ Status updated:");
+      log(JSON.stringify(data, null, 2));
+      loadRides();
+    })
+    .catch(err => log("❌ Status update error: " + err));
+}
+
+// =====================
+// Load rides (UI version)
 // =====================
 function loadRides() {
   log("➡️ Loading rides...");
@@ -88,26 +102,41 @@ function loadRides() {
   fetch(`${API}/api/rides`)
     .then(res => res.json())
     .then(data => {
+      const container = document.getElementById("rides");
 
       if (!Array.isArray(data)) {
-        log("❌ ERROR: Invalid response");
-        log(JSON.stringify(data, null, 2));
+        log("❌ Invalid response");
         return;
       }
 
-      log(`📦 Total rides: ${data.length}`);
+      container.innerHTML = "";
 
       data.forEach(r => {
-        log(`🚗 ${r.pickup} → ${r.destination} | ${r.status}`);
+        const div = document.createElement("div");
+
+        div.style.border = "1px solid #ccc";
+        div.style.padding = "10px";
+        div.style.margin = "10px 0";
+
+        div.innerHTML = `
+          <b>🚗 ${r.pickup} → ${r.destination}</b><br/>
+          <b>Status:</b> ${r.status}<br/><br/>
+
+          <button onclick="updateStatus('${r._id}', 'ACCEPTED')">Accept</button>
+          <button onclick="updateStatus('${r._id}', 'ARRIVING')">Arriving</button>
+          <button onclick="updateStatus('${r._id}', 'COMPLETED')">Complete</button>
+        `;
+
+        container.appendChild(div);
       });
+
+      log(`📦 Rides loaded: ${data.length}`);
     })
-    .catch(err => {
-      log("❌ Load error: " + err);
-    });
+    .catch(err => log("❌ Load error: " + err));
 }
 
 // =====================
-// Auto start
+// Init
 // =====================
 checkBackend();
 loadRides();
