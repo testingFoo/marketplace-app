@@ -6,7 +6,7 @@ const API = "https://marketplace-app-m8ac.onrender.com";
 let mode = "rider";
 
 // =====================
-// DOM SAFETY (prevents crashes)
+// DOM SAFETY
 // =====================
 const logBox = document.getElementById("log") || { innerText: "" };
 const statusBox = document.getElementById("status") || { innerText: "" };
@@ -35,6 +35,27 @@ function log(msg) {
 
 function setStatus(msg) {
   statusBox.innerText = msg;
+}
+
+// =====================
+// SAFE SOCKET SETUP (🔥 NEW)
+// =====================
+let socket = null;
+
+try {
+  socket = io(API);
+
+  socket.on("connect", () => {
+    log("🟢 Socket connected");
+  });
+
+  socket.on("connect_error", (err) => {
+    log("⚠️ Socket connection failed");
+    console.log(err);
+  });
+
+} catch (err) {
+  console.log("Socket disabled:", err);
 }
 
 // =====================
@@ -176,13 +197,28 @@ function loadRides() {
 }
 
 // =====================
+// REAL-TIME EVENTS (🔥 NEW)
+// =====================
+if (socket) {
+  socket.on("ride:new", (ride) => {
+    log("🆕 New ride (live)");
+    loadRides();
+  });
+
+  socket.on("ride:update", (ride) => {
+    log("🔄 Ride updated (live)");
+    loadRides();
+  });
+}
+
+// =====================
 // INIT
 // =====================
 checkBackend();
 loadRides();
 
 // =====================
-// EXPOSE GLOBALS (🔥 IMPORTANT FIX)
+// EXPOSE GLOBALS (🔥 IMPORTANT)
 // =====================
 window.createRide = createRide;
 window.updateStatus = updateStatus;
