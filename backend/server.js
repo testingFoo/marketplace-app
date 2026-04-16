@@ -14,9 +14,13 @@ const PORT = process.env.PORT || 3000;
 
 
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected"))
-  .catch((err) => console.log("MongoDB Error:", err));
-
+  .then(() => {
+    console.log("🟢 MongoDB Connected");
+  })
+  .catch((err) => {
+    console.log("🔴 MongoDB Connection Error:");
+    console.log(err);
+  });
 
 const rideSchema = new mongoose.Schema({
   pickup: {
