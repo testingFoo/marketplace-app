@@ -3,71 +3,89 @@ const API = "https://marketplace-app-m8ac.onrender.com";
 let mode = "rider";
 let driverOnline = false;
 
-let userId = localStorage.getItem("userId") || ("user_" + Date.now());
-let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
+let pickup = null;
+let drop = null;
 
+let userId = localStorage.getItem("userId") || ("user_" + Date.now());
 localStorage.setItem("userId", userId);
+
+let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
 localStorage.setItem("driverId", driverId);
 
 // =====================
-// STATE
-// =====================
-let map;
-let socket;
-let currentRide = null;
-let routeLine = null;
-
-// =====================
-// LOG
+// DEBUG
 // =====================
 function log(msg) {
   const el = document.getElementById("log");
   if (el) el.innerText += msg + "\n";
 }
 
-// =====================
-// MAP
-// =====================
-function initMap() {
-  map = L.map("map").setView([52.2297, 21.0122], 12);
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "OpenStreetMap"
-  }).addTo(map);
+function setStatus(msg) {
+  document.getElementById("status").innerText = msg;
 }
 
 // =====================
-// DRAW ROUTE
+// MAP
 // =====================
-function drawRoute(coords) {
-  if (!map || !coords) return;
+let map;
 
-  if (routeLine) map.removeLayer(routeLine);
+function initMap() {
+  map = L.map("map").setView([52.2297, 21.0122], 12);
 
-  routeLine = L.polyline(
-    coords.map(c => [c[1], c[0]]),
-    { color: "blue" }
-  ).addTo(map);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+
+  map.on("click", (e) => {
+    const { lat, lng } = e.latlng;
+
+    if (!pickup) {
+      pickup = { lat, lng };
+      document.getElementById("pickup").value = `${lat},${lng}`;
+    } else {
+      drop = { lat, lng };
+      document.getElementById("destination").value = `${lat},${lng}`;
+    }
+  });
 }
 
 // =====================
 // SOCKET
 // =====================
+let socket;
+
 function initSocket() {
   socket = io(API);
 
-  socket.on("ride:new", ({ ride, route }) => {
-    currentRide = ride;
-    if (route) drawRoute(route.coords);
-    loadRides();
-  });
+  socket.on("ride:new", () => loadRides());
+  socket.on("ride:update", () => loadRides());
+}
 
-  socket.on("ride:update", (ride) => {
-    if (currentRide && currentRide._id === ride._id) {
-      currentRide = ride;
-    }
-    loadRides();
-  });
+// =====================
+// CREATE RIDE
+// =====================
+function createRide() {
+  fetch(`${API}/api/ride`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      userId,
+      pickup: document.getElementById("pickup").value,
+      drop: document.getElementById("destination").value,
+      pickupCoords: pickup,
+      dropCoords: drop
+    })
+  }).then(loadRides);
+}
+
+// =====================
+// DRIVER MODE
+// =====================
+function toggleDriver() {
+  driverOnline = !driverOnline;
+
+  socket.emit(driverOnline ? "driver:online" : "driver:offline", driverId);
+
+  document.getElementById("driverToggle").innerText =
+    driverOnline ? "Go OFFLINE" : "Go ONLINE";
 }
 
 // =====================
@@ -80,45 +98,18 @@ function setMode(m) {
 }
 
 // =====================
-// DRIVER
-// =====================
-function toggleDriver() {
-  driverOnline = !driverOnline;
-
-  socket.emit(driverOnline ? "driver:online" : "driver:offline", driverId);
-
-  document.getElementById("driverToggle").innerText =
-    driverOnline ? "Go OFFLINE" : "Go ONLINE";
-}
-
-// =====================
-// CREATE RIDE
-// =====================
-function createRide() {
-  fetch(`${API}/api/ride`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      pickup: document.getElementById("pickup").value,
-      destination: document.getElementById("destination").value,
-      userId
-    })
-  });
-}
-
-// =====================
-// STATUS FLOW FIX
+// STATUS UPDATE
 // =====================
 function updateStatus(id, status) {
   fetch(`${API}/api/ride/${id}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status })
-  });
+  }).then(loadRides);
 }
 
 // =====================
-// LOAD RIDES (FIX DRIVER VIEW)
+// LOAD RIDES (CRITICAL FIX)
 // =====================
 function loadRides() {
   fetch(`${API}/api/rides`)
@@ -131,7 +122,9 @@ function loadRides() {
 
       if (mode === "driver") {
         filtered = data.filter(r =>
-          r.driverId === driverId || r.status === "ACCEPTED"
+          r.status === "ACCEPTED" ||
+          r.status === "ARRIVING" ||
+          r.status === "IN_PROGRESS"
         );
       }
 
@@ -141,20 +134,21 @@ function loadRides() {
 
       filtered.forEach(r => {
         const div = document.createElement("div");
+        div.className = "ride";
 
         div.innerHTML = `
-          <b>${r.pickup} → ${r.destination}</b><br/>
+          <b>${r.pickupText || r.pickup} → ${r.dropText || r.drop}</b><br/>
           Status: ${r.status}<br/>
 
-          ${r.driverId === driverId && r.status === "ACCEPTED"
-            ? `<button onclick="updateStatus('${r._id}','ARRIVING')">Arriving</button>`
+          ${r.status === "ACCEPTED"
+            ? `<button onclick="updateStatus('${r._id}','ARRIVING')">Start Arriving</button>`
             : ""}
 
-          ${r.driverId === driverId && r.status === "ARRIVING"
-            ? `<button onclick="updateStatus('${r._id}','IN_PROGRESS')">Start</button>`
+          ${r.status === "ARRIVING"
+            ? `<button onclick="updateStatus('${r._id}','IN_PROGRESS')">Start Ride</button>`
             : ""}
 
-          ${r.driverId === driverId && r.status === "IN_PROGRESS"
+          ${r.status === "IN_PROGRESS"
             ? `<button onclick="updateStatus('${r._id}','COMPLETED')">Complete</button>`
             : ""}
         `;
@@ -173,10 +167,9 @@ window.onload = () => {
   loadRides();
 };
 
-// =====================
-// EXPORTS
-// =====================
+// GLOBALS
 window.setMode = setMode;
 window.toggleDriver = toggleDriver;
 window.createRide = createRide;
 window.updateStatus = updateStatus;
+window.loadRides = loadRides;
