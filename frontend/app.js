@@ -1,175 +1,142 @@
 const API = "https://marketplace-app-m8ac.onrender.com";
 
-let mode = "rider";
+// ================= STATE =================
+let socket;
+let map;
+
+let userId = localStorage.getItem("userId") || ("user_" + Date.now());
+localStorage.setItem("userId", userId);
+
+let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
+localStorage.setItem("driverId", driverId);
+
 let driverOnline = false;
 
-let pickup = null;
-let drop = null;
+// ================= INIT =================
+window.onload = () => {
+  initSocket();
+  initMap();
+  loadRides();
+};
 
-// =====================
-// MAP
-// =====================
-let map;
-let driverMarkers = {};
-
-function initMap() {
-  map = L.map("map").setView([52.2297, 21.0122], 12);
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
-}
-
-// =====================
-// SOCKET
-// =====================
-let socket;
-
+// ================= SOCKET =================
 function initSocket() {
   socket = io(API);
 
-  socket.on("driver:move", (d) => {
-    if (!driverMarkers[d.driverId]) {
-      driverMarkers[d.driverId] = L.marker([d.lat, d.lng]).addTo(map);
-    } else {
-      driverMarkers[d.driverId].setLatLng([d.lat, d.lng]);
-    }
-  });
-
-  socket.on("ride:new", loadRides);
-  socket.on("ride:update", loadRides);
+  socket.on("ride:new", () => loadRides());
+  socket.on("ride:update", () => loadRides());
 }
 
-// =====================
-// SEARCH (FREE Nominatim)
-// =====================
-async function search(q) {
-  const r = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=json&q=${q}`
-  );
-  return r.json();
+// ================= MAP =================
+function initMap() {
+  map = L.map("map").setView([52.2297, 21.0122], 12);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "OSM"
+  }).addTo(map);
 }
 
-// =====================
-// PICKUP / DROP
-// =====================
-async function setPickup() {
-  const q = document.getElementById("pickup").value;
-  const r = await search(q);
-  if (r.length) pickup = { lat: +r[0].lat, lng: +r[0].lon };
-}
-
-async function setDrop() {
-  const q = document.getElementById("destination").value;
-  const r = await search(q);
-  if (r.length) drop = { lat: +r[0].lat, lng: +r[0].lon };
-}
-
-// =====================
-// CREATE RIDE
-// =====================
+// ================= CREATE RIDE =================
 function createRide() {
+  const pickup = document.getElementById("pickup").value;
+  const destination = document.getElementById("destination").value;
+
   fetch(`${API}/api/ride`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      userId: "u1",
-      pickup: document.getElementById("pickup").value,
-      drop: document.getElementById("destination").value,
-      pickupCoords: pickup,
-      dropCoords: drop,
-      type: "X"
-    })
+    body: JSON.stringify({ pickup, destination, userId })
+  }).then(loadRides);
+}
+
+// ================= DRIVER TOGGLE =================
+function toggleDriver() {
+  driverOnline = !driverOnline;
+
+  socket.emit(driverOnline ? "driver:online" : "driver:offline", driverId);
+
+  document.getElementById("driverStatus").innerText =
+    driverOnline ? "Online" : "Offline";
+}
+
+// ================= LOAD RIDES =================
+function loadRides() {
+  fetch(`${API}/api/rides`)
+    .then(r => r.json())
+    .then(rides => {
+
+      renderRider(rides);
+      renderDriver(rides);
+    });
+}
+
+// ================= RIDER VIEW =================
+function renderRider(rides) {
+  const box = document.getElementById("riderRides");
+  box.innerHTML = "";
+
+  rides
+    .filter(r => r.userId === userId)
+    .forEach(r => {
+      const div = document.createElement("div");
+      div.className = "ride";
+
+      div.innerHTML = `
+        <b>${r.pickup} → ${r.destination}</b><br/>
+        Status: ${r.status}<br/>
+        Driver: ${r.driverId || "NONE"}<br/>
+      `;
+
+      box.appendChild(div);
+    });
+}
+
+// ================= DRIVER VIEW =================
+function renderDriver(rides) {
+  const box = document.getElementById("driverRides");
+  box.innerHTML = "";
+
+  const driverRides = rides.filter(r =>
+    r.status === "REQUESTED" ||
+    r.driverId === driverId
+  );
+
+  driverRides.forEach(r => {
+    const div = document.createElement("div");
+    div.className = "ride";
+
+    div.innerHTML = `
+      <b>${r.pickup} → ${r.destination}</b><br/>
+      Status: ${r.status}<br/>
+      User: ${r.userId}<br/>
+      Driver: ${r.driverId || "UNASSIGNED"}<br/>
+
+      ${r.status === "ACCEPTED"
+        ? `<button onclick="updateStatus('${r._id}', 'ARRIVING')">Arriving</button>`
+        : ""}
+
+      ${r.status === "ARRIVING"
+        ? `<button onclick="updateStatus('${r._id}', 'IN_PROGRESS')">Start</button>`
+        : ""}
+
+      ${r.status === "IN_PROGRESS"
+        ? `<button onclick="updateStatus('${r._id}', 'COMPLETED')">Complete</button>`
+        : ""}
+    `;
+
+    box.appendChild(div);
   });
 }
 
-// =====================
-// DRIVER
-// =====================
-function toggleDriver() {
-  driverOnline = !driverOnline;
-  socket.emit(driverOnline ? "driver:online" : "driver:offline", "d1");
-
-  document.getElementById("driverToggle").innerText =
-    driverOnline ? "OFFLINE" : "ONLINE";
-}
-
-// =====================
-// STATUS UPDATE
-// =====================
+// ================= STATUS UPDATE =================
 function updateStatus(id, status) {
   fetch(`${API}/api/ride/${id}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status })
-  });
+  }).then(loadRides);
 }
 
-// =====================
-// CANCEL
-// =====================
-function cancelRide(id) {
-  fetch(`${API}/api/ride/${id}/cancel`, { method: "PATCH" });
-}
-
-// =====================
-// LOAD RIDES
-// =====================
-function loadRides() {
-  fetch(`${API}/api/rides`)
-    .then(r => r.json())
-    .then(data => {
-      const box = document.getElementById("rides");
-      box.innerHTML = "";
-
-      let filtered = data;
-
-      if (mode === "driver") {
-        filtered = data.filter(r =>
-          r.status === "ACCEPTED" ||
-          r.status === "ARRIVING" ||
-          r.status === "IN_PROGRESS"
-        );
-      }
-
-      filtered.forEach(r => {
-        const div = document.createElement("div");
-
-        div.innerHTML = `
-          <b>${r.pickupText || r.pickup} → ${r.dropText || r.drop}</b><br/>
-          Status: ${r.status}<br/>
-          Fare: ${r.fare || 0} PLN<br/>
-
-          ${r.status === "ACCEPTED"
-            ? `<button onclick="updateStatus('${r._id}','ARRIVING')">Start</button>`
-            : ""}
-
-          ${r.status === "ARRIVING"
-            ? `<button onclick="updateStatus('${r._id}','IN_PROGRESS')">Drive</button>`
-            : ""}
-
-          ${r.status === "IN_PROGRESS"
-            ? `<button onclick="updateStatus('${r._id}','COMPLETED')">Finish</button>`
-            : ""}
-
-          <button onclick="cancelRide('${r._id}')">Cancel</button>
-        `;
-
-        box.appendChild(div);
-      });
-    });
-}
-
-// =====================
-// INIT
-// =====================
-window.onload = () => {
-  initMap();
-  initSocket();
-  loadRides();
-};
-
-// expose
+// ================= GLOBALS =================
 window.createRide = createRide;
 window.toggleDriver = toggleDriver;
 window.updateStatus = updateStatus;
-window.cancelRide = cancelRide;
-window.loadRides = loadRides;
