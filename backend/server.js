@@ -40,6 +40,7 @@ mongoose.connect(MONGO_URI)
 // =====================
 const rideSchema = new mongoose.Schema({
   userId: String,
+  driverId: String, // NEW (who accepted it)
   pickup: String,
   destination: String,
   status: {
@@ -119,15 +120,27 @@ app.get("/api/rides", async (req, res) => {
 // =====================
 app.patch("/api/ride/:id/status", async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, driverId } = req.body;
 
-    console.log("📌 Status Update:", req.params.id, status);
+    const ride = await Ride.findById(req.params.id);
 
-    const ride = await Ride.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    );
+    if (!ride) {
+      return res.status(404).json({ error: "Ride not found" });
+    }
+
+    // 🚨 LOCK LOGIC (IMPORTANT)
+    if (status === "ACCEPTED") {
+      if (ride.status !== "REQUESTED") {
+        return res.status(400).json({ error: "Already accepted" });
+      }
+
+      ride.status = "ACCEPTED";
+      ride.driverId = driverId;
+    } else {
+      ride.status = status;
+    }
+
+    await ride.save();
 
     res.json(ride);
 
