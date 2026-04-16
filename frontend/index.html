@@ -50,6 +50,16 @@
     <button onclick="checkBackend()">Check Backend</button>
     <button onclick="createRide()">Create Ride</button>
     <button onclick="loadRides()">Refresh Rides</button>
+
+    <div style="margin-top:10px;">
+  <b>Mode:</b>
+  <button onclick="setMode('rider')">👤 Rider</button>
+  <button onclick="setMode('driver')">🚗 Driver</button>
+
+  <span id="modeLabel">Current: Rider</span>
+</div>
+
+    
   </div>
 
   <h3>🚗 Rides</h3>
