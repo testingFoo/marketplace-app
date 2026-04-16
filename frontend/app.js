@@ -7,7 +7,7 @@ let mode = "rider";
 let driverOnline = false;
 
 // =====================
-// IDS (stable identity)
+// IDS (stable)
 // =====================
 let userId = localStorage.getItem("userId");
 
@@ -36,25 +36,16 @@ function initSocket() {
       log("🟢 Socket connected");
     });
 
-    socket.on("disconnect", () => {
-      log("🔴 Socket disconnected");
-    });
-
-    socket.on("connect_error", (err) => {
-      log("⚠️ Socket error");
-      console.log(err);
-    });
-
-    socket.on("ride:new", () => loadRides());
-    socket.on("ride:update", () => loadRides());
+    socket.on("ride:new", loadRides);
+    socket.on("ride:update", loadRides);
 
   } catch (err) {
-    console.log("Socket init failed:", err);
+    console.log("Socket error:", err);
   }
 }
 
 // =====================
-// DOM ELEMENTS
+// DOM
 // =====================
 let logBox;
 let statusBox;
@@ -73,11 +64,19 @@ function setStatus(msg) {
 }
 
 // =====================
+// MODE LABEL FIX
+// =====================
+function updateModeLabel() {
+  const label = document.getElementById("modeLabel");
+  if (label) {
+    label.innerText = "Current: " + mode.toUpperCase();
+  }
+}
+
+// =====================
 // BACKEND CHECK
 // =====================
 function checkBackend() {
-  log("➡️ Checking backend...");
-
   fetch(`${API}/api/health`)
     .then(res => res.json())
     .then(data => {
@@ -94,20 +93,16 @@ function checkBackend() {
 // MODE SWITCH (FIXED)
 // =====================
 function setMode(newMode) {
-  console.log("MODE SWITCH:", newMode);
-
   mode = newMode;
 
   setStatus("Mode: " + mode);
+  updateModeLabel();
 
-  // 🔥 force safe re-render
-  setTimeout(() => {
-    loadRides();
-  }, 0);
+  setTimeout(() => loadRides(), 0);
 }
 
 // =====================
-// DRIVER TOGGLE
+// DRIVER ONLINE/OFFLINE
 // =====================
 function toggleDriver() {
   driverOnline = !driverOnline;
@@ -123,9 +118,7 @@ function toggleDriver() {
   }
 
   const btn = document.getElementById("driverToggle");
-  if (btn) {
-    btn.innerText = driverOnline ? "Go OFFLINE" : "Go ONLINE";
-  }
+  if (btn) btn.innerText = driverOnline ? "Go OFFLINE" : "Go ONLINE";
 }
 
 // =====================
@@ -135,22 +128,13 @@ function createRide() {
   const pickup = document.getElementById("pickup")?.value;
   const destination = document.getElementById("destination")?.value;
 
-  if (!pickup || !destination) {
-    log("❌ Missing input");
-    return;
-  }
-
   fetch(`${API}/api/ride`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ pickup, destination, userId })
   })
     .then(res => res.json())
-    .then(data => {
-      log("🚗 Ride created: " + data._id);
-      loadRides();
-    })
-    .catch(err => log("❌ Create error: " + err));
+    .then(() => loadRides());
 }
 
 // =====================
@@ -161,14 +145,11 @@ function updateStatus(id, status) {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status, driverId })
-  })
-    .then(res => res.json())
-    .then(() => loadRides())
-    .catch(err => log("❌ Update error: " + err));
+  }).then(() => loadRides());
 }
 
 // =====================
-// LOAD RIDES (FIXED RENDER)
+// LOAD RIDES (FIXED DRIVER VISIBILITY)
 // =====================
 function loadRides() {
   if (!ridesBox) return;
@@ -177,28 +158,28 @@ function loadRides() {
     .then(res => res.json())
     .then(data => {
 
-      console.log("ALL RIDES:", data);
       console.log("MODE:", mode);
+      console.log("RIDES:", data);
 
       ridesBox.innerHTML = "";
 
-      // 🔥 DEBUG HEADER
+      // DEBUG HEADER
       const debug = document.createElement("div");
       debug.style.padding = "8px";
       debug.style.background = "#eee";
-      debug.innerText = `MODE: ${mode} | TOTAL RIDES: ${data.length}`;
+      debug.innerText = `MODE: ${mode} | TOTAL: ${data.length}`;
       ridesBox.appendChild(debug);
 
       let filtered = data;
 
-      // DRIVER VIEW
       if (mode === "driver") {
-        filtered = data.filter(
-          r => r.status === "REQUESTED" || r.driverId === driverId
+        filtered = data.filter(r =>
+          r.status === "REQUESTED" ||
+          r.status === "ACCEPTED" ||
+          r.driverId === driverId
         );
       }
 
-      // RIDER VIEW
       if (mode === "rider") {
         filtered = data.filter(r => r.userId === userId);
       }
@@ -227,22 +208,16 @@ function loadRides() {
 
         ridesBox.appendChild(div);
       });
-    })
-    .catch(err => log("❌ Load error: " + err));
+    });
 }
 
 // =====================
-// INIT (CRITICAL FIX)
+// INIT
 // =====================
 window.onload = () => {
   logBox = document.getElementById("log");
   statusBox = document.getElementById("status");
   ridesBox = document.getElementById("rides");
-
-  if (!logBox || !statusBox || !ridesBox) {
-    console.log("❌ Missing DOM elements");
-    return;
-  }
 
   log("🟢 App initialized");
 
@@ -252,7 +227,7 @@ window.onload = () => {
 };
 
 // =====================
-// GLOBAL EXPORTS (IMPORTANT)
+// GLOBALS
 // =====================
 window.createRide = createRide;
 window.updateStatus = updateStatus;
