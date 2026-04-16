@@ -29,16 +29,16 @@ let onlineDrivers = {};
 let driverLocations = {};
 
 // =====================
-// ROUTE API
+// ROUTE ENGINE
 // =====================
-async function getRoute(p1, p2, d1, d2) {
+async function getRoute(aLat, aLng, bLat, bLng) {
   try {
     const url =
       `https://router.project-osrm.org/route/v1/driving/` +
-      `${p2},${p1};${d2},${d1}?overview=full&geometries=geojson`;
+      `${aLng},${aLat};${bLng},${bLat}?overview=full&geometries=geojson`;
 
     const res = await axios.get(url);
-    const route = res.data.routes[0];
+    const route = res.data.routes?.[0];
 
     if (!route) return null;
 
@@ -60,11 +60,13 @@ io.on("connection", (socket) => {
 
   socket.on("driver:online", (driverId) => {
     onlineDrivers[driverId] = { socketId: socket.id, busy: false };
+    console.log("🟢 Driver online", driverId);
   });
 
   socket.on("driver:offline", (driverId) => {
     delete onlineDrivers[driverId];
     delete driverLocations[driverId];
+    console.log("🔴 Driver offline", driverId);
   });
 
   socket.on("driver:location", ({ driverId, lat, lng }) => {
@@ -81,7 +83,7 @@ const rideSchema = new mongoose.Schema({
   driverId: String,
   pickup: String,
   destination: String,
-  status: { type: String, default: "REQUESTED" },
+  status: String,
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -98,20 +100,48 @@ app.get("/api/health", (req, res) => {
 });
 
 // =====================
-// CREATE RIDE (STEP H FIXED)
+// CREATE RIDE (FIXED FLOW)
 // =====================
 app.post("/api/ride", async (req, res) => {
-  const { pickup, destination, userId } = req.body;
+  const { pickup, destination, userId, pickupCoords, dropCoords } = req.body;
 
-  const ride = await Ride.create({
-    pickup,
-    destination,
-    userId,
-    status: "REQUESTED",
-    driverId: null
-  });
+  let bestDriver = null;
 
-  const route = await getRoute(52.2297, 21.0122, 52.24, 21.02);
+  for (const id of Object.keys(onlineDrivers)) {
+    if (!onlineDrivers[id].busy) {
+      bestDriver = id;
+      break;
+    }
+  }
+
+  let ride;
+
+  if (bestDriver) {
+    onlineDrivers[bestDriver].busy = true;
+
+    ride = await Ride.create({
+      pickup,
+      destination,
+      userId,
+      driverId: bestDriver,
+      status: "ACCEPTED"
+    });
+  } else {
+    ride = await Ride.create({
+      pickup,
+      destination,
+      userId,
+      driverId: null,
+      status: "NO_DRIVER_AVAILABLE"
+    });
+  }
+
+  const route = await getRoute(
+    pickupCoords?.lat || 52.2297,
+    pickupCoords?.lng || 21.0122,
+    dropCoords?.lat || 52.23,
+    dropCoords?.lng || 21.01
+  );
 
   io.emit("ride:new", { ride, route });
 
@@ -119,30 +149,14 @@ app.post("/api/ride", async (req, res) => {
 });
 
 // =====================
-// DRIVER ACCEPT RIDE
+// GET RIDES
 // =====================
-app.patch("/api/ride/:id/accept", async (req, res) => {
-  const { driverId } = req.body;
-
-  const ride = await Ride.findById(req.params.id);
-  if (!ride) return res.status(404).json({ error: "Not found" });
-
-  if (ride.status !== "REQUESTED") {
-    return res.status(400).json({ error: "Already taken" });
-  }
-
-  ride.driverId = driverId;
-  ride.status = "ACCEPTED";
-
-  await ride.save();
-
-  io.emit("ride:update", ride);
-
-  res.json(ride);
+app.get("/api/rides", async (req, res) => {
+  res.json(await Ride.find().sort({ createdAt: -1 }));
 });
 
 // =====================
-// STATUS FLOW
+// STATUS UPDATE (FULL FIX)
 // =====================
 app.patch("/api/ride/:id/status", async (req, res) => {
   const { status } = req.body;
@@ -150,10 +164,16 @@ app.patch("/api/ride/:id/status", async (req, res) => {
   const ride = await Ride.findById(req.params.id);
   if (!ride) return res.status(404).json({ error: "Not found" });
 
+  if (ride.status === "NO_DRIVER_AVAILABLE") {
+    return res.status(400).json({ error: "No driver" });
+  }
+
   ride.status = status;
 
-  if (status === "COMPLETED" && onlineDrivers[ride.driverId]) {
-    onlineDrivers[ride.driverId].busy = false;
+  if (status === "COMPLETED" && ride.driverId) {
+    if (onlineDrivers[ride.driverId]) {
+      onlineDrivers[ride.driverId].busy = false;
+    }
   }
 
   await ride.save();
@@ -164,14 +184,8 @@ app.patch("/api/ride/:id/status", async (req, res) => {
 });
 
 // =====================
-// GET RIDES
-// =====================
-app.get("/api/rides", async (req, res) => {
-  const rides = await Ride.find().sort({ createdAt: -1 });
-  res.json(rides);
-});
-
+// START
 // =====================
 server.listen(3000, () => {
-  console.log("🚀 Step H backend running");
+  console.log("🚀 STEP H BACKEND READY");
 });
