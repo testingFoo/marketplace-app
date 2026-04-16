@@ -3,13 +3,10 @@ const API = "https://marketplace-app-m8ac.onrender.com";
 const logBox = document.getElementById("log");
 const statusBox = document.getElementById("status");
 
-// =====================
-// MODE SYSTEM
-// =====================
 let mode = "rider";
 
 // =====================
-// USER ID (RIDER)
+// IDs
 // =====================
 const userId =
   localStorage.getItem("userId") ||
@@ -17,17 +14,14 @@ const userId =
 
 localStorage.setItem("userId", userId);
 
-// =====================
-// DRIVER ID
-// =====================
 const driverId =
   localStorage.getItem("driverId") ||
   Math.random().toString(36).substring(2, 10);
 
 localStorage.setItem("driverId", driverId);
 
-logBox.innerText += "👤 User ID: " + userId + "\n";
-logBox.innerText += "🚗 Driver ID: " + driverId + "\n";
+logBox.innerText += "👤 User: " + userId + "\n";
+logBox.innerText += "🚗 Driver: " + driverId + "\n";
 
 // =====================
 // LOGGING
@@ -41,93 +35,69 @@ function setStatus(msg) {
 }
 
 // =====================
-// SWITCH MODE
+// MODE SWITCH
 // =====================
 function setMode(newMode) {
   mode = newMode;
-
   document.getElementById("modeLabel").innerText =
     "Current: " + mode.toUpperCase();
 
-  log("🔄 Mode switched → " + mode);
+  log("🔄 Mode: " + mode);
 
   loadRides();
 }
 
 // =====================
-// CHECK BACKEND
+// BACKEND CHECK
 // =====================
 function checkBackend() {
-  log("➡️ Checking backend...");
-
   fetch(`${API}/api/health`)
     .then(res => res.json())
     .then(data => {
-      const backendStatus =
-        data.status === "ok" ? "🟢 Backend OK" : "🔴 Backend Error";
+      setStatus(
+        `${data.status === "ok" ? "🟢 Backend OK" : "🔴 Backend"} | ` +
+        `${data.db === "connected" ? "🟢 DB" : "🔴 DB"}`
+      );
 
-      const dbStatus =
-        data.db === "connected"
-          ? "🟢 DB Connected"
-          : "🔴 DB Disconnected";
-
-      setStatus(`${backendStatus} | ${dbStatus}`);
-
-      log("✅ Health:");
-      log(JSON.stringify(data, null, 2));
+      log("📡 Health:");
+      log(JSON.stringify(data));
     })
-    .catch(err => {
-      setStatus("🔴 Backend Failed");
-      log("❌ ERROR: " + err);
-    });
+    .catch(err => log("❌ Backend error: " + err));
 }
 
 // =====================
-// CREATE RIDE (INPUT BASED)
+// CREATE RIDE (INPUTS)
 // =====================
 function createRide() {
-  log("➡️ Creating ride...");
-
   const pickup = document.getElementById("pickup").value;
   const destination = document.getElementById("destination").value;
 
   if (!pickup || !destination) {
-    log("⚠️ Missing input fields");
+    log("⚠️ Missing input");
     return;
   }
 
   fetch(`${API}/api/ride`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      pickup,
-      destination,
-      userId
-    })
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pickup, destination, userId })
   })
     .then(res => res.json())
     .then(data => {
-      log("✅ Ride created:");
-      log(JSON.stringify(data, null, 2));
-
+      log("✅ Ride created");
+      log(JSON.stringify(data));
       loadRides();
     })
     .catch(err => log("❌ Create error: " + err));
 }
 
 // =====================
-// UPDATE STATUS (DRIVER)
+// UPDATE STATUS
 // =====================
 function updateStatus(id, status) {
-  log(`➡️ Updating ${id} → ${status}`);
-
   fetch(`${API}/api/ride/${id}/status`, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       status,
       driverId
@@ -135,47 +105,30 @@ function updateStatus(id, status) {
   })
     .then(res => res.json())
     .then(data => {
-      log("✅ Updated:");
-      log(JSON.stringify(data, null, 2));
-
+      log("🔄 Updated ride");
       loadRides();
     })
     .catch(err => log("❌ Update error: " + err));
 }
 
 // =====================
-// LOAD RIDES (STEP 4 LOGIC)
+// LOAD RIDES (LIVE)
 // =====================
 function loadRides() {
-  log("➡️ Loading rides...");
-
   fetch(`${API}/api/rides`)
     .then(res => res.json())
     .then(data => {
       const container = document.getElementById("rides");
       container.innerHTML = "";
 
-      if (!Array.isArray(data)) {
-        log("❌ Invalid response");
-        return;
-      }
-
       let filtered = data;
 
-      // 🚗 DRIVER VIEW
       if (mode === "driver") {
         filtered = data.filter(r => r.status === "REQUESTED");
       }
 
-      // 👤 RIDER VIEW
       if (mode === "rider") {
         filtered = data.filter(r => r.userId === userId);
-      }
-
-      if (filtered.length === 0) {
-        container.innerHTML = "<p>No rides found</p>";
-        log("📭 Empty view: " + mode);
-        return;
       }
 
       filtered.forEach(r => {
@@ -193,24 +146,27 @@ function loadRides() {
         }
 
         if (mode === "rider") {
-          buttons = `<small>👤 Tracking ride</small>`;
+          buttons = `<small>Tracking...</small>`;
         }
 
         div.innerHTML = `
-          <b>🚗 ${r.pickup} → ${r.destination}</b><br/>
-          <b>Status:</b> ${r.status}<br/>
-          <small>User: ${r.userId}</small><br/>
-          <small>Driver: ${r.driverId || "none"}</small><br/><br/>
+          <b>${r.pickup} → ${r.destination}</b><br/>
+          Status: ${r.status}<br/>
+          Driver: ${r.driverId || "none"}<br/><br/>
           ${buttons}
         `;
 
         container.appendChild(div);
       });
-
-      log(`📦 Loaded ${filtered.length} rides`);
-    })
-    .catch(err => log("❌ Load error: " + err));
+    });
 }
+
+// =====================
+// 🔥 LIVE AUTO REFRESH (STEP 5)
+// =====================
+setInterval(() => {
+  loadRides();
+}, 3000);
 
 // =====================
 // INIT
