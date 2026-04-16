@@ -1,10 +1,13 @@
 const API = "https://marketplace-app-m8ac.onrender.com";
 
 // =====================
-// STATE
+// STATE (SINGLE SOURCE OF TRUTH)
 // =====================
 let mode = "rider";
 let driverOnline = false;
+
+let pickup = null;
+let drop = null;
 
 let userId = localStorage.getItem("userId") || ("user_" + Date.now());
 localStorage.setItem("userId", userId);
@@ -31,9 +34,35 @@ function log(msg) {
 // MAP
 // =====================
 let map;
-let markers = {};
-let selectedPickup = null;
-let selectedDrop = null;
+
+// =====================
+// INIT MAP
+// =====================
+function initMap() {
+  map = L.map("map").setView([52.2297, 21.0122], 12);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "OpenStreetMap"
+  }).addTo(map);
+
+  map.on("click", (e) => {
+    const { lat, lng } = e.latlng;
+
+    if (!pickup) {
+      pickup = { lat, lng };
+      document.getElementById("pickup").value =
+        `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      log("📍 Pickup set from map");
+    } else {
+      drop = { lat, lng };
+      document.getElementById("destination").value =
+        `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      log("📍 Drop set from map");
+    }
+  });
+
+  log("🗺️ Map ready");
+}
 
 // =====================
 // SOCKET
@@ -43,96 +72,57 @@ let socket;
 function initSocket() {
   socket = io(API);
 
-  socket.on("connect", () => log("🟢 Socket connected"));
-
-  socket.on("ride:new", (data) => {
-    if (data.route) drawRoute(data.route.coords);
-    loadRides();
+  socket.on("connect", () => {
+    log("🟢 Socket connected");
   });
 
-  socket.on("ride:update", loadRides);
+  socket.on("ride:new", () => loadRides());
+  socket.on("ride:update", () => loadRides());
 }
 
 // =====================
-// MAP INIT
-// =====================
-function initMap() {
-  map = L.map("map").setView([52.2297, 21.0122], 12);
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "OpenStreetMap"
-  }).addTo(map);
-
-  map.on("click", async (e) => {
-    const { lat, lng } = e.latlng;
-
-    if (!selectedPickup) {
-      selectedPickup = { lat, lng };
-      log("📍 Pickup selected");
-      addMarker(lat, lng, "Pickup");
-    } else {
-      selectedDrop = { lat, lng };
-      log("📍 Drop selected");
-      addMarker(lat, lng, "Drop");
-    }
-  });
-
-  log("🗺️ Map ready");
-}
-
-// =====================
-// MARKERS
-// =====================
-function addMarker(lat, lng, label) {
-  const m = L.marker([lat, lng]).addTo(map).bindPopup(label);
-  markers[label] = m;
-}
-
-// =====================
-// ADDRESS SEARCH (NOMINATIM)
+// SEARCH (NOMINATIM)
 // =====================
 async function searchAddress(query) {
   const res = await fetch(
     `https://nominatim.openstreetmap.org/search?format=json&q=${query}`
   );
-
-  const data = await res.json();
-  return data;
+  return await res.json();
 }
 
 // =====================
-// UI SEARCH HANDLERS
+// SEARCH HANDLERS
 // =====================
 async function handlePickupSearch() {
   const q = document.getElementById("pickup").value;
-
   const results = await searchAddress(q);
 
-  if (results.length > 0) {
+  if (results.length) {
     const r = results[0];
-    selectedPickup = { lat: r.lat, lng: r.lon };
+    pickup = { lat: parseFloat(r.lat), lng: parseFloat(r.lon) };
+    document.getElementById("pickup").value = r.display_name;
     log("📍 Pickup set from search");
   }
 }
 
 async function handleDropSearch() {
   const q = document.getElementById("destination").value;
-
   const results = await searchAddress(q);
 
-  if (results.length > 0) {
+  if (results.length) {
     const r = results[0];
-    selectedDrop = { lat: r.lat, lng: r.lon };
+    drop = { lat: parseFloat(r.lat), lng: parseFloat(r.lon) };
+    document.getElementById("destination").value = r.display_name;
     log("📍 Drop set from search");
   }
 }
 
 // =====================
-// CREATE RIDE (REAL COORDS)
+// CREATE RIDE
 // =====================
 function createRide() {
-  if (!selectedPickup || !selectedDrop) {
-    log("❌ Select pickup & drop first");
+  if (!pickup || !drop) {
+    log("❌ Missing pickup or drop");
     return;
   }
 
@@ -140,28 +130,37 @@ function createRide() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      pickup: "Selected Location",
-      destination: "Selected Location",
+      pickup: document.getElementById("pickup").value,
+      destination: document.getElementById("destination").value,
+      pickupCoords: pickup,
+      dropCoords: drop,
       userId
     })
   }).then(loadRides);
 }
 
+// =====================
+// MODE
+// =====================
 function setMode(m) {
   mode = m;
   updateModeLabel();
   loadRides();
 }
 
+function updateModeLabel() {
+  const el = document.getElementById("modeLabel");
+  if (el) el.innerText = "Current: " + mode.toUpperCase();
+}
+
+// =====================
+// DRIVER
+// =====================
 function toggleDriver() {
   driverOnline = !driverOnline;
 
   if (socket) {
-    if (driverOnline) {
-      socket.emit("driver:online", driverId);
-    } else {
-      socket.emit("driver:offline", driverId);
-    }
+    socket.emit(driverOnline ? "driver:online" : "driver:offline", driverId);
   }
 
   const btn = document.getElementById("driverToggle");
@@ -193,72 +192,6 @@ function loadRides() {
 }
 
 // =====================
-// MODE UI UPDATE FIX
-// =====================
-function updateModeLabel() {
-  const el = document.getElementById("modeLabel");
-  if (el) {
-    el.innerText = "Current: " + mode.toUpperCase();
-  }
-}
-
-// MAP CLICK → INPUT SYNC
-// =====================
-function bindMapClick() {
-  if (!map) return;
-
-  map.on("click", async (e) => {
-    const { lat, lng } = e.latlng;
-
-    // reverse geocode (optional simple placeholder)
-    const label = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-
-    if (!window._selectedType) return;
-
-    if (window._selectedType === "pickup") {
-      document.getElementById("pickup").value = label;
-      window._pickupCoords = { lat, lng };
-    }
-
-    if (window._selectedType === "drop") {
-      document.getElementById("destination").value = label;
-      window._dropCoords = { lat, lng };
-    }
-  });
-}
-
-function selectPickupMode() {
-  window._selectedType = "pickup";
-  log("📍 Click map for PICKUP");
-}
-
-function selectDropMode() {
-  window._selectedType = "drop";
-  log("📍 Click map for DROP");
-}
-
-
-
-function updateStatus(id, status) {
-  fetch(`${API}/api/ride/${id}/status`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ status })
-  })
-    .then(res => res.json())
-    .then(data => {
-      log("🔄 Status updated: " + status);
-      loadRides();
-    })
-    .catch(err => {
-      log("❌ Update failed: " + err);
-    });
-}
-
-
-// =====================
 // BACKEND CHECK
 // =====================
 function checkBackend() {
@@ -282,14 +215,12 @@ window.onload = () => {
 };
 
 // =====================
-// GLOBALS
+// GLOBAL EXPORTS
 // =====================
 window.setMode = setMode;
 window.toggleDriver = toggleDriver;
 window.createRide = createRide;
 window.checkBackend = checkBackend;
 window.loadRides = loadRides;
-window.updateStatus = updateStatus
-// expose search functions
 window.handlePickupSearch = handlePickupSearch;
 window.handleDropSearch = handleDropSearch;
