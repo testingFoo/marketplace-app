@@ -202,6 +202,42 @@ function updateModeLabel() {
   }
 }
 
+// MAP CLICK → INPUT SYNC
+// =====================
+function bindMapClick() {
+  if (!map) return;
+
+  map.on("click", async (e) => {
+    const { lat, lng } = e.latlng;
+
+    // reverse geocode (optional simple placeholder)
+    const label = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+
+    if (!window._selectedType) return;
+
+    if (window._selectedType === "pickup") {
+      document.getElementById("pickup").value = label;
+      window._pickupCoords = { lat, lng };
+    }
+
+    if (window._selectedType === "drop") {
+      document.getElementById("destination").value = label;
+      window._dropCoords = { lat, lng };
+    }
+  });
+}
+
+function selectPickupMode() {
+  window._selectedType = "pickup";
+  log("📍 Click map for PICKUP");
+}
+
+function selectDropMode() {
+  window._selectedType = "drop";
+  log("📍 Click map for DROP");
+}
+
+
 
 function updateStatus(id, status) {
   fetch(`${API}/api/ride/${id}/status`, {
