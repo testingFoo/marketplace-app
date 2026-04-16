@@ -76,7 +76,17 @@ function initSocket() {
     log("🟢 Socket connected");
   });
 
-  socket.on("ride:new", () => loadRides());
+  socket.on("ride:new", (payload) => {
+    // FIX: backend sends { ride, route }
+    log("🚕 Ride received");
+
+    if (payload?.route) {
+      log("🗺️ Route available");
+    }
+
+    loadRides();
+  });
+
   socket.on("ride:update", () => loadRides());
 }
 
@@ -136,7 +146,13 @@ function createRide() {
       dropCoords: drop,
       userId
     })
-  }).then(loadRides);
+  })
+    .then(res => res.json())
+    .then(data => {
+      log("🚗 Ride created");
+      loadRides();
+    })
+    .catch(err => log("❌ Create ride error " + err));
 }
 
 // =====================
@@ -168,7 +184,7 @@ function toggleDriver() {
 }
 
 // =====================
-// LOAD RIDES
+// LOAD RIDES (🔥 FIXED DRIVER VISIBILITY)
 // =====================
 function loadRides() {
   fetch(`${API}/api/rides`)
@@ -177,13 +193,30 @@ function loadRides() {
       const box = document.getElementById("rides");
       box.innerHTML = "";
 
-      data.forEach(r => {
+      let filtered = data;
+
+      // 🔥 FIX 1: DRIVER must see assigned + available rides
+      if (mode === "driver") {
+        filtered = data.filter(r =>
+          r.status === "REQUESTED" ||
+          r.driverId === driverId ||
+          r.status === "ACCEPTED"
+        );
+      }
+
+      // rider sees only own rides
+      if (mode === "rider") {
+        filtered = data.filter(r => r.userId === userId);
+      }
+
+      filtered.forEach(r => {
         const div = document.createElement("div");
         div.className = "ride";
 
         div.innerHTML = `
           <b>${r.pickup} → ${r.destination}</b><br/>
-          Status: ${r.status}
+          Status: ${r.status}<br/>
+          Driver: ${r.driverId || "none"}
         `;
 
         box.appendChild(div);
