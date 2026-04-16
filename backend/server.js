@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000;
 
 ---
 
-# 🧠 MongoDB Connection
+// 🧠 MongoDB Connection
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
