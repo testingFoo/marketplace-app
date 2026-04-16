@@ -202,7 +202,7 @@ window.toggleDriver = toggleDriver;
 window.createRide = createRide;
 window.checkBackend = checkBackend;
 window.loadRides = loadRides;
-
+window.updateStatus = updateStatus
 // expose search functions
 window.handlePickupSearch = handlePickupSearch;
 window.handleDropSearch = handleDropSearch;
