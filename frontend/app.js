@@ -13,7 +13,7 @@ let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
 localStorage.setItem("driverId", driverId);
 
 // =====================
-// DEBUG HELPERS
+// DEBUG
 // =====================
 function setStatus(msg) {
   const el = document.getElementById("status");
@@ -28,78 +28,80 @@ function log(msg) {
 }
 
 // =====================
+// MAP
+// =====================
+let map;
+let markers = {};
+let routeLine = null;
+
+// =====================
 // SOCKET
 // =====================
 let socket;
 
 function initSocket() {
-  try {
-    socket = io(API);
+  socket = io(API);
 
-    socket.on("connect", () => {
-      log("🟢 Socket connected");
-    });
+  socket.on("connect", () => log("🟢 Socket connected"));
 
-    socket.on("ride:new", () => {
-      log("🚕 New ride");
-      loadRides();
-    });
+  socket.on("ride:new", (data) => {
+    log("🚕 New ride received");
+    if (data.route) drawRoute(data.route.coords);
+    loadRides();
+  });
 
-    socket.on("ride:update", () => {
-      log("🔄 Ride update");
-      loadRides();
-    });
+  socket.on("ride:update", () => loadRides());
 
-    socket.on("driver:move", (data) => {
-      const { driverId: id, lat, lng } = data;
+  socket.on("driver:move", (data) => {
+    const { driverId: id, lat, lng } = data;
 
-      if (!map) return;
+    if (!map) return;
 
-      if (!markers[id]) {
-        markers[id] = L.marker([lat, lng]).addTo(map);
-      } else {
-        markers[id].setLatLng([lat, lng]);
-      }
-    });
-
-  } catch (err) {
-    log("❌ Socket error: " + err);
-  }
+    if (!markers[id]) {
+      markers[id] = L.marker([lat, lng]).addTo(map);
+    } else {
+      markers[id].setLatLng([lat, lng]);
+    }
+  });
 }
 
 // =====================
-// MAP
+// MAP INIT
 // =====================
-let map;
-let markers = {};
-
 function initMap() {
-  try {
-    if (typeof L === "undefined") {
-      log("❌ Leaflet missing");
-      return;
-    }
+  map = L.map("map").setView([52.2297, 21.0122], 12);
 
-    const el = document.getElementById("map");
-    if (!el) {
-      log("❌ Map container missing");
-      return;
-    }
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "OpenStreetMap"
+  }).addTo(map);
 
-    map = L.map("map").setView([52.2297, 21.0122], 12);
-
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "OpenStreetMap"
-    }).addTo(map);
-
-    log("🗺️ Map ready");
-  } catch (err) {
-    log("❌ Map error: " + err);
-  }
+  log("🗺️ Map ready");
 }
 
 // =====================
-// DRIVER MOVEMENT (SIM)
+// ROUTE DRAWING
+// =====================
+function drawRoute(coords) {
+  if (!map || !coords) return;
+
+  if (routeLine) {
+    map.removeLayer(routeLine);
+  }
+
+  const latlngs = coords.map(c => [c[1], c[0]]);
+
+  routeLine = L.polyline(latlngs, {
+    color: "blue",
+    weight: 4
+  }).addTo(map);
+
+  map.fitBounds(routeLine.getBounds());
+
+  log("🧭 Route drawn");
+}
+
+// =====================
+// DRIVER MOVEMENT (UNCHANGED)
 // =====================
 function startDriverMovement() {
   if (!driverOnline) return;
@@ -138,15 +140,12 @@ function updateModeLabel() {
 // =====================
 function checkBackend() {
   fetch(`${API}/api/health`)
-    .then(res => res.json())
-    .then(data => {
-      setStatus(`${data.status} | DB: ${data.db}`);
+    .then(r => r.json())
+    .then(d => {
+      setStatus(`${d.status} | DB: ${d.db}`);
       log("📡 Backend OK");
     })
-    .catch(err => {
-      setStatus("❌ Backend failed");
-      log("❌ " + err);
-    });
+    .catch(e => log("❌ " + e));
 }
 
 // =====================
@@ -155,19 +154,38 @@ function checkBackend() {
 function toggleDriver() {
   driverOnline = !driverOnline;
 
-  if (socket) {
-    if (driverOnline) {
-      socket.emit("driver:online", driverId);
-      startDriverMovement();
-      log("🟢 Driver ONLINE");
-    } else {
-      socket.emit("driver:offline", driverId);
-      log("🔴 Driver OFFLINE");
-    }
+  if (driverOnline) {
+    socket.emit("driver:online", driverId);
+    startDriverMovement();
+    log("🟢 Driver ONLINE");
+  } else {
+    socket.emit("driver:offline", driverId);
+    log("🔴 Driver OFFLINE");
   }
+}
 
-  const btn = document.getElementById("driverToggle");
-  if (btn) btn.innerText = driverOnline ? "Go OFFLINE" : "Go ONLINE";
+// =====================
+// LOAD RIDES
+// =====================
+function loadRides() {
+  fetch(`${API}/api/rides`)
+    .then(r => r.json())
+    .then(data => {
+      const box = document.getElementById("rides");
+      box.innerHTML = "";
+
+      data.forEach(r => {
+        const div = document.createElement("div");
+        div.className = "ride";
+
+        div.innerHTML = `
+          <b>${r.pickup} → ${r.destination}</b><br/>
+          Status: ${r.status}
+        `;
+
+        box.appendChild(div);
+      });
+    });
 }
 
 // =====================
@@ -185,83 +203,10 @@ function createRide() {
 }
 
 // =====================
-// UPDATE STATUS
-// =====================
-function updateStatus(id, status) {
-  if (!driverOnline) {
-    log("❌ Driver offline — cannot update");
-    return;
-  }
-
-  fetch(`${API}/api/ride/${id}/status`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status })
-  }).then(loadRides);
-}
-
-// =====================
-// LOAD RIDES
-// =====================
-function loadRides() {
-  fetch(`${API}/api/rides`)
-    .then(res => res.json())
-    .then(data => {
-      const box = document.getElementById("rides");
-      if (!box) return;
-
-      box.innerHTML = "";
-
-      let filtered = data;
-
-      if (mode === "driver") {
-        filtered = data.filter(r =>
-          r.status === "REQUESTED" ||
-          r.status === "ACCEPTED" ||
-          r.driverId === driverId
-        );
-      }
-
-      if (mode === "rider") {
-        filtered = data.filter(r => r.userId === userId);
-      }
-
-      filtered.forEach(r => {
-        const div = document.createElement("div");
-        div.className = "ride";
-
-        div.innerHTML = `
-          <b>${r.pickup} → ${r.destination}</b><br/>
-          Status: ${r.status}<br/>
-
-          ${r.status === "NO_DRIVER_AVAILABLE"
-            ? `<span style="color:red">No driver available</span>`
-            : ""}
-
-          ${r.status === "ACCEPTED"
-            ? `<button onclick="updateStatus('${r._id}', 'ARRIVING')">Arriving</button>`
-            : ""}
-
-          ${r.status === "ARRIVING"
-            ? `<button onclick="updateStatus('${r._id}', 'IN_PROGRESS')">Start</button>`
-            : ""}
-
-          ${r.status === "IN_PROGRESS"
-            ? `<button onclick="updateStatus('${r._id}', 'COMPLETED')">Complete</button>`
-            : ""}
-        `;
-
-        box.appendChild(div);
-      });
-    });
-}
-
-// =====================
 // INIT
 // =====================
 window.onload = () => {
   log("🟢 App loaded");
-
   initMap();
   initSocket();
   updateModeLabel();
@@ -269,11 +214,10 @@ window.onload = () => {
 };
 
 // =====================
-// GLOBAL EXPORTS
+// GLOBALS
 // =====================
 window.setMode = setMode;
 window.toggleDriver = toggleDriver;
 window.createRide = createRide;
-window.updateStatus = updateStatus;
 window.checkBackend = checkBackend;
 window.loadRides = loadRides;
