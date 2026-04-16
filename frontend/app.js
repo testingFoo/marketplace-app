@@ -1,6 +1,6 @@
 const API = "https://marketplace-app-m8ac.onrender.com";
 
-const socket = io(API); // 🔥 CONNECT SOCKET
+// const socket = io(API); // 🔥 CONNECT SOCKET
 
 const logBox = document.getElementById("log");
 const statusBox = document.getElementById("status");
@@ -33,7 +33,7 @@ function setStatus(msg) {
   statusBox.innerText = msg;
 }
 
-// =====================
+/* 
 // SOCKET EVENTS (🔥 REAL TIME)
 // =====================
 socket.on("ride:new", (ride) => {
@@ -49,6 +49,7 @@ socket.on("ride:update", (ride) => {
 
   loadRides();
 });
+*/
 
 // =====================
 // BACKEND CHECK
