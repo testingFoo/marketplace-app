@@ -1,19 +1,16 @@
 const API = "https://marketplace-app-m8ac.onrender.com";
 
-// =====================
-// STATE
-// =====================
-
 let mode = "rider";
+let driverOnline = false;
 
 // =====================
-// DOM SAFETY
+// DOM
 // =====================
 const logBox = document.getElementById("log") || { innerText: "" };
 const statusBox = document.getElementById("status") || { innerText: "" };
 
 // =====================
-// USER IDS
+// IDS
 // =====================
 const userId =
   localStorage.getItem("userId") ||
@@ -28,7 +25,7 @@ const driverId =
 localStorage.setItem("driverId", driverId);
 
 // =====================
-// LOGGING
+// LOG
 // =====================
 function log(msg) {
   logBox.innerText += msg + "\n";
@@ -39,7 +36,7 @@ function setStatus(msg) {
 }
 
 // =====================
-// SAFE SOCKET
+// SOCKET
 // =====================
 let socket = null;
 
@@ -50,47 +47,38 @@ try {
     log("🟢 Socket connected");
   });
 
-  socket.on("connect_error", (err) => {
-    log("⚠️ Socket failed");
-    console.log(err);
-  });
-
 } catch (err) {
-  console.log("Socket disabled:", err);
+  console.log("Socket disabled");
 }
 
 // =====================
-// MODE SWITCH
+// DRIVER TOGGLE
+// =====================
+function toggleDriver() {
+  driverOnline = !driverOnline;
+
+  if (!socket) return;
+
+  if (driverOnline) {
+    socket.emit("driver:online", driverId);
+    log("🟢 Driver ONLINE");
+  } else {
+    socket.emit("driver:offline", driverId);
+    log("🔴 Driver OFFLINE");
+  }
+
+  const btn = document.getElementById("driverToggle");
+  if (btn) {
+    btn.innerText = driverOnline ? "Go OFFLINE" : "Go ONLINE";
+  }
+}
+
+// =====================
+// MODE
 // =====================
 function setMode(newMode) {
   mode = newMode;
-
-  const label = document.getElementById("modeLabel");
-  if (label) {
-    label.innerText = "Current: " + newMode.toUpperCase();
-  }
-
-  log("🔁 Mode: " + newMode);
   loadRides();
-}
-
-// =====================
-// BACKEND CHECK
-// =====================
-function checkBackend() {
-  log("➡️ Checking backend...");
-
-  fetch(`${API}/api/health`)
-    .then(res => res.json())
-    .then(data => {
-      setStatus(`${data.status} | DB: ${data.db}`);
-      log("📡 Health:");
-      log(JSON.stringify(data, null, 2));
-    })
-    .catch(err => {
-      setStatus("❌ Backend error");
-      log("❌ ERROR: " + err);
-    });
 }
 
 // =====================
@@ -100,53 +88,26 @@ function createRide() {
   const pickup = document.getElementById("pickup")?.value;
   const destination = document.getElementById("destination")?.value;
 
-  if (!pickup || !destination) {
-    log("❌ Missing pickup/destination");
-    return;
-  }
-
-  log("🚗 Creating ride...");
-
   fetch(`${API}/api/ride`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ pickup, destination, userId })
-  })
-    .then(res => res.json())
-    .then(data => {
-      log("✅ Ride created");
-      loadRides();
-    })
-    .catch(err => {
-      log("❌ Create error: " + err);
-    });
+  }).then(loadRides);
 }
 
 // =====================
 // UPDATE STATUS
 // =====================
 function updateStatus(id, status) {
-  log(`🔄 ${status}`);
-
   fetch(`${API}/api/ride/${id}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      status,
-      driverId
-    })
-  })
-    .then(res => res.json())
-    .then(() => {
-      loadRides();
-    })
-    .catch(err => {
-      log("❌ Update error: " + err);
-    });
+    body: JSON.stringify({ status, driverId })
+  }).then(loadRides);
 }
 
 // =====================
-// LOAD RIDES (🔥 STEP A UI)
+// LOAD RIDES
 // =====================
 function loadRides() {
   fetch(`${API}/api/rides`)
@@ -161,7 +122,7 @@ function loadRides() {
 
       if (mode === "driver") {
         filtered = data.filter(
-          r => r.status === "REQUESTED" || r.driverId === driverId
+          r => r.driverId === driverId
         );
       }
 
@@ -171,83 +132,38 @@ function loadRides() {
 
       filtered.forEach(r => {
         const div = document.createElement("div");
-        div.className = "ride";
-
-        // 🧠 PROGRESS
-        const stages = ["REQUESTED", "ACCEPTED", "ARRIVING", "IN_PROGRESS", "COMPLETED"];
-        const currentIndex = stages.indexOf(r.status);
-
-        const progress = stages
-          .map((s, i) => {
-            if (i < currentIndex) return "✅ " + s;
-            if (i === currentIndex) return "🟡 " + s;
-            return "⬜ " + s;
-          })
-          .join(" → ");
-
-        // 🧠 BUTTONS
-        let buttons = "";
-
-        if (mode === "driver") {
-          if (r.status === "REQUESTED") {
-            buttons += `<button onclick="updateStatus('${r._id}', 'ACCEPTED')">Accept</button>`;
-          }
-          if (r.status === "ACCEPTED") {
-            buttons += `<button onclick="updateStatus('${r._id}', 'ARRIVING')">Arriving</button>`;
-          }
-          if (r.status === "ARRIVING") {
-            buttons += `<button onclick="updateStatus('${r._id}', 'IN_PROGRESS')">Start</button>`;
-          }
-          if (r.status === "IN_PROGRESS") {
-            buttons += `<button onclick="updateStatus('${r._id}', 'COMPLETED')">Complete</button>`;
-          }
-        }
 
         div.innerHTML = `
           <b>${r.pickup} → ${r.destination}</b><br/>
-          Driver: ${r.driverId || "none"}<br/><br/>
+          Status: ${r.status}<br/><br/>
 
-          <div style="margin-bottom:10px;">
-            ${progress}
-          </div>
-
-          ${buttons}
+          ${r.status === "ACCEPTED" ? `<button onclick="updateStatus('${r._id}', 'ARRIVING')">Arriving</button>` : ""}
+          ${r.status === "ARRIVING" ? `<button onclick="updateStatus('${r._id}', 'IN_PROGRESS')">Start</button>` : ""}
+          ${r.status === "IN_PROGRESS" ? `<button onclick="updateStatus('${r._id}', 'COMPLETED')">Complete</button>` : ""}
         `;
 
         container.appendChild(div);
       });
-    })
-    .catch(err => {
-      log("❌ Load error: " + err);
     });
 }
 
 // =====================
-// REAL-TIME EVENTS
+// REALTIME
 // =====================
 if (socket) {
-  socket.on("ride:new", () => {
-    log("🆕 New ride");
-    loadRides();
-  });
-
-  socket.on("ride:update", () => {
-    log("🔄 Live update");
-    loadRides();
-  });
+  socket.on("ride:new", loadRides);
+  socket.on("ride:update", loadRides);
 }
 
 // =====================
 // INIT
 // =====================
-checkBackend();
 loadRides();
 
 // =====================
-// GLOBALS (🔥 REQUIRED)
+// GLOBAL
 // =====================
 window.createRide = createRide;
 window.updateStatus = updateStatus;
-window.checkBackend = checkBackend;
-window.loadRides = loadRides;
 window.setMode = setMode;
+window.toggleDriver = toggleDriver;
