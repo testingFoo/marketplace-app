@@ -12,7 +12,6 @@ app.use(cors({
 
 const PORT = process.env.PORT || 3000;
 
-
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log("🟢 MongoDB Connected");
@@ -21,6 +20,8 @@ mongoose.connect(process.env.MONGO_URI)
     console.log("🔴 MongoDB Connection Error:");
     console.log(err);
   });
+
+console.log("MONGO_URI =", process.env.MONGO_URI);
 
 const rideSchema = new mongoose.Schema({
   pickup: {
