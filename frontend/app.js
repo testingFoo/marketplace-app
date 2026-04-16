@@ -192,6 +192,25 @@ function loadRides() {
     });
 }
 
+function updateStatus(id, status) {
+  fetch(`${API}/api/ride/${id}/status`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ status })
+  })
+    .then(res => res.json())
+    .then(data => {
+      log("🔄 Status updated: " + status);
+      loadRides();
+    })
+    .catch(err => {
+      log("❌ Update failed: " + err);
+    });
+}
+
+
 // =====================
 // BACKEND CHECK
 // =====================
