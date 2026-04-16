@@ -13,7 +13,7 @@ let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
 localStorage.setItem("driverId", driverId);
 
 // =====================
-// SAFE UI HELPERS (CRITICAL FIX)
+// DEBUG HELPERS
 // =====================
 function setStatus(msg) {
   const el = document.getElementById("status");
@@ -28,7 +28,7 @@ function log(msg) {
 }
 
 // =====================
-// SOCKET (SAFE INIT)
+// SOCKET
 // =====================
 let socket;
 
@@ -38,6 +38,16 @@ function initSocket() {
 
     socket.on("connect", () => {
       log("🟢 Socket connected");
+    });
+
+    socket.on("ride:new", () => {
+      log("🚕 New ride");
+      loadRides();
+    });
+
+    socket.on("ride:update", () => {
+      log("🔄 Ride update");
+      loadRides();
     });
 
     socket.on("driver:move", (data) => {
@@ -52,16 +62,13 @@ function initSocket() {
       }
     });
 
-    socket.on("ride:new", loadRides);
-    socket.on("ride:update", loadRides);
-
   } catch (err) {
     log("❌ Socket error: " + err);
   }
 }
 
 // =====================
-// MAP (SAFE)
+// MAP
 // =====================
 let map;
 let markers = {};
@@ -69,7 +76,7 @@ let markers = {};
 function initMap() {
   try {
     if (typeof L === "undefined") {
-      log("❌ Leaflet not loaded");
+      log("❌ Leaflet missing");
       return;
     }
 
@@ -85,14 +92,14 @@ function initMap() {
       attribution: "OpenStreetMap"
     }).addTo(map);
 
-    log("🗺️ Map initialized");
+    log("🗺️ Map ready");
   } catch (err) {
     log("❌ Map error: " + err);
   }
 }
 
 // =====================
-// DRIVER MOVEMENT
+// DRIVER MOVEMENT (SIM)
 // =====================
 function startDriverMovement() {
   if (!driverOnline) return;
@@ -121,9 +128,6 @@ function setMode(m) {
   loadRides();
 }
 
-// =====================
-// MODE LABEL
-// =====================
 function updateModeLabel() {
   const el = document.getElementById("modeLabel");
   if (el) el.innerText = "Current: " + mode.toUpperCase();
@@ -184,6 +188,11 @@ function createRide() {
 // UPDATE STATUS
 // =====================
 function updateStatus(id, status) {
+  if (!driverOnline) {
+    log("❌ Driver offline — cannot update");
+    return;
+  }
+
   fetch(`${API}/api/ride/${id}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -207,7 +216,9 @@ function loadRides() {
 
       if (mode === "driver") {
         filtered = data.filter(r =>
-          r.status === "REQUESTED" || r.driverId === driverId
+          r.status === "REQUESTED" ||
+          r.status === "ACCEPTED" ||
+          r.driverId === driverId
         );
       }
 
@@ -222,6 +233,10 @@ function loadRides() {
         div.innerHTML = `
           <b>${r.pickup} → ${r.destination}</b><br/>
           Status: ${r.status}<br/>
+
+          ${r.status === "NO_DRIVER_AVAILABLE"
+            ? `<span style="color:red">No driver available</span>`
+            : ""}
 
           ${r.status === "ACCEPTED"
             ? `<button onclick="updateStatus('${r._id}', 'ARRIVING')">Arriving</button>`
@@ -242,10 +257,10 @@ function loadRides() {
 }
 
 // =====================
-// INIT SAFE ENTRY
+// INIT
 // =====================
 window.onload = () => {
-  log("🟢 App initialized");
+  log("🟢 App loaded");
 
   initMap();
   initSocket();
@@ -254,7 +269,7 @@ window.onload = () => {
 };
 
 // =====================
-// GLOBAL EXPORTS (FIXED CLEAN)
+// GLOBAL EXPORTS
 // =====================
 window.setMode = setMode;
 window.toggleDriver = toggleDriver;
