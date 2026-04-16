@@ -29,31 +29,13 @@ let onlineDrivers = {};
 let driverLocations = {};
 
 // =====================
-// DISTANCE
-// =====================
-function getDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) *
-    Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) ** 2;
-
-  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-// =====================
 // ROUTE API
 // =====================
-async function getRoute(pickupLat, pickupLng, dropLat, dropLng) {
+async function getRoute(p1, p2, d1, d2) {
   try {
     const url =
       `https://router.project-osrm.org/route/v1/driving/` +
-      `${pickupLng},${pickupLat};${dropLng},${dropLat}` +
-      `?overview=full&geometries=geojson`;
+      `${p2},${p1};${d2},${d1}?overview=full&geometries=geojson`;
 
     const res = await axios.get(url);
     const route = res.data.routes[0];
@@ -65,8 +47,8 @@ async function getRoute(pickupLat, pickupLng, dropLat, dropLng) {
       distance: route.distance,
       duration: route.duration
     };
-  } catch (err) {
-    console.log("❌ Route error:", err.message);
+  } catch (e) {
+    console.log("Route error", e.message);
     return null;
   }
 }
@@ -85,10 +67,8 @@ io.on("connection", (socket) => {
     delete driverLocations[driverId];
   });
 
-  socket.on("driver:location", (data) => {
-    const { driverId, lat, lng } = data;
+  socket.on("driver:location", ({ driverId, lat, lng }) => {
     driverLocations[driverId] = { lat, lng };
-
     io.emit("driver:move", { driverId, lat, lng });
   });
 });
@@ -101,7 +81,7 @@ const rideSchema = new mongoose.Schema({
   driverId: String,
   pickup: String,
   destination: String,
-  status: String,
+  status: { type: String, default: "REQUESTED" },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -118,67 +98,69 @@ app.get("/api/health", (req, res) => {
 });
 
 // =====================
-// CREATE RIDE (CLEAN FLOW)
+// CREATE RIDE (STEP H FIXED)
 // =====================
 app.post("/api/ride", async (req, res) => {
   const { pickup, destination, userId } = req.body;
 
-  const pickupLat = 52.2297;
-  const pickupLng = 21.0122;
+  const ride = await Ride.create({
+    pickup,
+    destination,
+    userId,
+    status: "REQUESTED",
+    driverId: null
+  });
 
-  const dropLat = 52.23 + Math.random() * 0.02;
-  const dropLng = 21.01 + Math.random() * 0.02;
+  const route = await getRoute(52.2297, 21.0122, 52.24, 21.02);
 
-  let bestDriver = null;
-  let bestDistance = Infinity;
+  io.emit("ride:new", { ride, route });
 
-  for (const id of Object.keys(onlineDrivers)) {
-    const loc = driverLocations[id];
-    if (!loc || onlineDrivers[id].busy) continue;
+  res.json({ ride, route });
+});
 
-    const dist = getDistance(pickupLat, pickupLng, loc.lat, loc.lng);
+// =====================
+// DRIVER ACCEPT RIDE
+// =====================
+app.patch("/api/ride/:id/accept", async (req, res) => {
+  const { driverId } = req.body;
 
-    if (dist < bestDistance) {
-      bestDistance = dist;
-      bestDriver = id;
-    }
+  const ride = await Ride.findById(req.params.id);
+  if (!ride) return res.status(404).json({ error: "Not found" });
+
+  if (ride.status !== "REQUESTED") {
+    return res.status(400).json({ error: "Already taken" });
   }
 
-  let ride;
+  ride.driverId = driverId;
+  ride.status = "ACCEPTED";
 
-  if (bestDriver) {
-    onlineDrivers[bestDriver].busy = true;
+  await ride.save();
 
-    ride = await Ride.create({
-      pickup,
-      destination,
-      userId,
-      driverId: bestDriver,
-      status: "ACCEPTED"
-    });
-  } else {
-    ride = await Ride.create({
-      pickup,
-      destination,
-      userId,
-      driverId: null,
-      status: "NO_DRIVER_AVAILABLE"
-    });
+  io.emit("ride:update", ride);
+
+  res.json(ride);
+});
+
+// =====================
+// STATUS FLOW
+// =====================
+app.patch("/api/ride/:id/status", async (req, res) => {
+  const { status } = req.body;
+
+  const ride = await Ride.findById(req.params.id);
+  if (!ride) return res.status(404).json({ error: "Not found" });
+
+  ride.status = status;
+
+  if (status === "COMPLETED" && onlineDrivers[ride.driverId]) {
+    onlineDrivers[ride.driverId].busy = false;
   }
 
-  const route = await getRoute(
-    pickupLat,
-    pickupLng,
-    dropLat,
-    dropLng
-  );
+  await ride.save();
 
-  // 🔥 ALWAYS SAME SHAPE
-  const payload = { ride, route };
+  io.emit("ride:update", ride);
 
-  io.emit("ride:new", payload);
-
-  res.json(payload);
+  res.json(ride);
 });
 
 // =====================
@@ -190,36 +172,6 @@ app.get("/api/rides", async (req, res) => {
 });
 
 // =====================
-// STATUS UPDATE
-// =====================
-app.patch("/api/ride/:id/status", async (req, res) => {
-  const { status } = req.body;
-
-  const ride = await Ride.findById(req.params.id);
-  if (!ride) return res.status(404).json({ error: "Not found" });
-
-  if (ride.status === "NO_DRIVER_AVAILABLE") {
-    return res.status(400).json({ error: "No driver assigned" });
-  }
-
-  ride.status = status;
-
-  if (status === "COMPLETED" && ride.driverId) {
-    if (onlineDrivers[ride.driverId]) {
-      onlineDrivers[ride.driverId].busy = false;
-    }
-  }
-
-  await ride.save();
-
-  io.emit("ride:update", ride);
-
-  res.json(ride);
-});
-
-// =====================
-// START
-// =====================
 server.listen(3000, () => {
-  console.log("🚀 Step F server running (clean dispatch + routes)");
+  console.log("🚀 Step H backend running");
 });
