@@ -46,7 +46,7 @@ function getDistance(lat1, lon1, lat2, lon2) {
 }
 
 // =====================
-// ROUTE API (OSRM)
+// ROUTE API
 // =====================
 async function getRoute(pickupLat, pickupLng, dropLat, dropLng) {
   try {
@@ -56,7 +56,6 @@ async function getRoute(pickupLat, pickupLng, dropLat, dropLng) {
       `?overview=full&geometries=geojson`;
 
     const res = await axios.get(url);
-
     const route = res.data.routes[0];
 
     if (!route) return null;
@@ -119,7 +118,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // =====================
-// CREATE RIDE (STEP F UPGRADED)
+// CREATE RIDE (CLEAN FLOW)
 // =====================
 app.post("/api/ride", async (req, res) => {
   const { pickup, destination, userId } = req.body;
@@ -130,7 +129,6 @@ app.post("/api/ride", async (req, res) => {
   const dropLat = 52.23 + Math.random() * 0.02;
   const dropLng = 21.01 + Math.random() * 0.02;
 
-  // nearest driver
   let bestDriver = null;
   let bestDistance = Infinity;
 
@@ -168,7 +166,6 @@ app.post("/api/ride", async (req, res) => {
     });
   }
 
-  // route (even if no driver → still show map path)
   const route = await getRoute(
     pickupLat,
     pickupLng,
@@ -176,9 +173,12 @@ app.post("/api/ride", async (req, res) => {
     dropLng
   );
 
-  io.emit("ride:new", { ride, route });
+  // 🔥 ALWAYS SAME SHAPE
+  const payload = { ride, route };
 
-  res.json({ ride, route });
+  io.emit("ride:new", payload);
+
+  res.json(payload);
 });
 
 // =====================
@@ -221,5 +221,5 @@ app.patch("/api/ride/:id/status", async (req, res) => {
 // START
 // =====================
 server.listen(3000, () => {
-  console.log("🚀 Step F server running (routes + dispatch)");
+  console.log("🚀 Step F server running (clean dispatch + routes)");
 });
