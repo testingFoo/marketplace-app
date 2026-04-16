@@ -3,18 +3,22 @@ const API = "https://marketplace-app-m8ac.onrender.com";
 let mode = "rider";
 let driverOnline = false;
 
-let pickup = null;
-let drop = null;
-
-let map;
-let routeLine;
-
 let userId = localStorage.getItem("userId") || ("user_" + Date.now());
-localStorage.setItem("userId", userId);
-
 let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
+
+localStorage.setItem("userId", userId);
 localStorage.setItem("driverId", driverId);
 
+// =====================
+// STATE
+// =====================
+let map;
+let socket;
+let currentRide = null;
+let routeLine = null;
+
+// =====================
+// LOG
 // =====================
 function log(msg) {
   const el = document.getElementById("log");
@@ -22,34 +26,23 @@ function log(msg) {
 }
 
 // =====================
+// MAP
+// =====================
 function initMap() {
   map = L.map("map").setView([52.2297, 21.0122], 12);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "OSM"
+    attribution: "OpenStreetMap"
   }).addTo(map);
 }
 
 // =====================
-let socket;
-
-function initSocket() {
-  socket = io(API);
-
-  socket.on("ride:new", (data) => {
-    log("🚕 new ride");
-
-    if (data.route) drawRoute(data.route.coords);
-
-    loadRides();
-  });
-
-  socket.on("ride:update", loadRides);
-}
-
+// DRAW ROUTE
 // =====================
 function drawRoute(coords) {
-  if (routeLine) routeLine.remove();
+  if (!map || !coords) return;
+
+  if (routeLine) map.removeLayer(routeLine);
 
   routeLine = L.polyline(
     coords.map(c => [c[1], c[0]]),
@@ -58,37 +51,48 @@ function drawRoute(coords) {
 }
 
 // =====================
+// SOCKET
+// =====================
+function initSocket() {
+  socket = io(API);
+
+  socket.on("ride:new", ({ ride, route }) => {
+    currentRide = ride;
+    if (route) drawRoute(route.coords);
+    loadRides();
+  });
+
+  socket.on("ride:update", (ride) => {
+    if (currentRide && currentRide._id === ride._id) {
+      currentRide = ride;
+    }
+    loadRides();
+  });
+}
+
+// =====================
+// MODE
+// =====================
 function setMode(m) {
   mode = m;
-  document.getElementById("modeLabel").innerText =
-    "Current: " + mode.toUpperCase();
+  document.getElementById("modeLabel").innerText = "Current: " + m.toUpperCase();
   loadRides();
 }
 
 // =====================
+// DRIVER
+// =====================
 function toggleDriver() {
   driverOnline = !driverOnline;
+
   socket.emit(driverOnline ? "driver:online" : "driver:offline", driverId);
+
+  document.getElementById("driverToggle").innerText =
+    driverOnline ? "Go OFFLINE" : "Go ONLINE";
 }
 
 // =====================
-function acceptRide(id) {
-  fetch(`${API}/api/ride/${id}/accept`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ driverId })
-  }).then(loadRides);
-}
-
-// =====================
-function updateStatus(id, status) {
-  fetch(`${API}/api/ride/${id}/status`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status })
-  }).then(loadRides);
-}
-
+// CREATE RIDE
 // =====================
 function createRide() {
   fetch(`${API}/api/ride`, {
@@ -99,9 +103,22 @@ function createRide() {
       destination: document.getElementById("destination").value,
       userId
     })
-  }).then(loadRides);
+  });
 }
 
+// =====================
+// STATUS FLOW FIX
+// =====================
+function updateStatus(id, status) {
+  fetch(`${API}/api/ride/${id}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status })
+  });
+}
+
+// =====================
+// LOAD RIDES (FIX DRIVER VIEW)
 // =====================
 function loadRides() {
   fetch(`${API}/api/rides`)
@@ -114,8 +131,7 @@ function loadRides() {
 
       if (mode === "driver") {
         filtered = data.filter(r =>
-          r.status === "REQUESTED" ||
-          r.driverId === driverId
+          r.driverId === driverId || r.status === "ACCEPTED"
         );
       }
 
@@ -129,22 +145,17 @@ function loadRides() {
         div.innerHTML = `
           <b>${r.pickup} → ${r.destination}</b><br/>
           Status: ${r.status}<br/>
-          Driver: ${r.driverId || "none"}<br/>
 
-          ${mode === "driver" && r.status === "REQUESTED"
-            ? `<button onclick="acceptRide('${r._id}')">ACCEPT</button>`
+          ${r.driverId === driverId && r.status === "ACCEPTED"
+            ? `<button onclick="updateStatus('${r._id}','ARRIVING')">Arriving</button>`
             : ""}
 
-          ${r.status === "ACCEPTED" && r.driverId === driverId
-            ? `<button onclick="updateStatus('${r._id}','ARRIVING')">ARRIVING</button>`
+          ${r.driverId === driverId && r.status === "ARRIVING"
+            ? `<button onclick="updateStatus('${r._id}','IN_PROGRESS')">Start</button>`
             : ""}
 
-          ${r.status === "ARRIVING" && r.driverId === driverId
-            ? `<button onclick="updateStatus('${r._id}','IN_PROGRESS')">START</button>`
-            : ""}
-
-          ${r.status === "IN_PROGRESS" && r.driverId === driverId
-            ? `<button onclick="updateStatus('${r._id}','COMPLETED')">COMPLETE</button>`
+          ${r.driverId === driverId && r.status === "IN_PROGRESS"
+            ? `<button onclick="updateStatus('${r._id}','COMPLETED')">Complete</button>`
             : ""}
         `;
 
@@ -154,6 +165,8 @@ function loadRides() {
 }
 
 // =====================
+// INIT
+// =====================
 window.onload = () => {
   initMap();
   initSocket();
@@ -161,14 +174,9 @@ window.onload = () => {
 };
 
 // =====================
-// GLOBAL EXPORTS
+// EXPORTS
 // =====================
 window.setMode = setMode;
 window.toggleDriver = toggleDriver;
-window.updateStatus = updateStatus;
-window.acceptRide = acceptRide;
 window.createRide = createRide;
-window.checkBackend = checkBackend;
-window.loadRides = loadRides;
-window.handlePickupSearch = handlePickupSearch;
-window.handleDropSearch = handleDropSearch;
+window.updateStatus = updateStatus;
