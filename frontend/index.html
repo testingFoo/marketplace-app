@@ -37,6 +37,12 @@
       padding: 10px;
       margin-bottom: 10px;
     }
+
+    .modeBox {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px dashed #999;
+    }
   </style>
 </head>
 
@@ -44,27 +50,31 @@
 
   <h1>🚗 Uber Clone Debug Dashboard</h1>
 
+  <!-- STATUS -->
   <div class="box">
     <div id="status" class="status">⏳ Starting...</div>
 
     <button onclick="checkBackend()">Check Backend</button>
     <button onclick="createRide()">Create Ride</button>
     <button onclick="loadRides()">Refresh Rides</button>
-
-    <div style="margin-top:10px;">
-  <b>Mode:</b>
-  <button onclick="setMode('rider')">👤 Rider</button>
-  <button onclick="setMode('driver')">🚗 Driver</button>
-
-  <span id="modeLabel">Current: Rider</span>
-</div>
-
-    
   </div>
 
+  <!-- MODE SWITCH -->
+  <div class="modeBox">
+    <b>Mode:</b>
+
+    <button onclick="setMode('rider')">👤 Rider</button>
+    <button onclick="setMode('driver')">🚗 Driver</button>
+
+    <br><br>
+    <span id="modeLabel">Current: RIDER</span>
+  </div>
+
+  <!-- RIDES -->
   <h3>🚗 Rides</h3>
   <div id="rides"></div>
 
+  <!-- DEBUG CONSOLE -->
   <h3>🧠 Debug Console</h3>
   <pre id="log"></pre>
 
