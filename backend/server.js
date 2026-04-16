@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000;
 
 ---
 
-// 🧠 MongoDB Connection
+// MongoDB Connection
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
@@ -23,7 +23,7 @@ mongoose.connect(process.env.MONGO_URI)
 
 ---
 
-# 🚗 Ride Schema
+// Ride Schema
 
 const rideSchema = new mongoose.Schema({
   pickup: {
@@ -53,9 +53,7 @@ const rideSchema = new mongoose.Schema({
 
 const Ride = mongoose.model("Ride", rideSchema);
 
----
-
-# 🏠 Health Check
+// Health Check
 
 app.get("/api/health", (req, res) => {
   res.json({
@@ -64,9 +62,8 @@ app.get("/api/health", (req, res) => {
   });
 });
 
----
 
-# 🏠 Root Route
+// Root Route
 
 app.get("/", (req, res) => {
   res.send("Uber Backend Running 🚀");
@@ -74,7 +71,7 @@ app.get("/", (req, res) => {
 
 ---
 
-# 🚗 Create Ride (MongoDB)
+// Create Ride (MongoDB)
 
 app.post("/api/ride", async (req, res) => {
   try {
@@ -97,9 +94,8 @@ app.post("/api/ride", async (req, res) => {
   }
 });
 
----
 
-# 🔄 Update Ride Status (Uber Logic)
+//  Update Ride Status (Uber Logic)
 
 app.patch("/api/ride/:id/status", async (req, res) => {
   try {
@@ -117,9 +113,9 @@ app.patch("/api/ride/:id/status", async (req, res) => {
   }
 });
 
----
 
-# 📊 Get All Rides
+
+//  Get All Rides
 
 app.get("/api/rides", async (req, res) => {
   try {
@@ -130,9 +126,8 @@ app.get("/api/rides", async (req, res) => {
   }
 });
 
----
 
-# 🚀 Start Server
+//  Start Server
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
