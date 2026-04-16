@@ -7,9 +7,6 @@ const { Server } = require("socket.io");
 const app = express();
 const server = http.createServer(app);
 
-// =====================
-// SOCKET
-// =====================
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST", "PATCH"] }
 });
@@ -31,19 +28,37 @@ let onlineDrivers = {};
 let driverLocations = {};
 
 // =====================
-// SOCKET EVENTS
+// DISTANCE FUNCTION (Haversine)
+// =====================
+function getDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+// =====================
+// SOCKET
 // =====================
 io.on("connection", (socket) => {
 
   socket.on("driver:online", (driverId) => {
     onlineDrivers[driverId] = { socketId: socket.id, busy: false };
-    console.log("🟢 Driver online:", driverId);
   });
 
   socket.on("driver:offline", (driverId) => {
     delete onlineDrivers[driverId];
     delete driverLocations[driverId];
-    console.log("🔴 Driver offline:", driverId);
   });
 
   socket.on("driver:location", (data) => {
@@ -80,25 +95,47 @@ app.get("/api/health", (req, res) => {
 });
 
 // =====================
-// CREATE RIDE (SMART DISPATCH)
+// CREATE RIDE (NEAREST DRIVER LOGIC)
 // =====================
 app.post("/api/ride", async (req, res) => {
   const { pickup, destination, userId } = req.body;
 
-  const availableDriverId = Object.keys(onlineDrivers).find(
-    d => !onlineDrivers[d].busy
-  );
+  let bestDriver = null;
+  let bestDistance = Infinity;
+
+  // Fake pickup coords (you can later replace with real geocoding)
+  const pickupLat = 52.2297;
+  const pickupLng = 21.0122;
+
+  for (const driverId of Object.keys(onlineDrivers)) {
+    const loc = driverLocations[driverId];
+
+    if (!loc) continue;
+    if (onlineDrivers[driverId].busy) continue;
+
+    const dist = getDistance(
+      pickupLat,
+      pickupLng,
+      loc.lat,
+      loc.lng
+    );
+
+    if (dist < bestDistance) {
+      bestDistance = dist;
+      bestDriver = driverId;
+    }
+  }
 
   let ride;
 
-  if (availableDriverId) {
-    onlineDrivers[availableDriverId].busy = true;
+  if (bestDriver) {
+    onlineDrivers[bestDriver].busy = true;
 
     ride = await Ride.create({
       pickup,
       destination,
       userId,
-      driverId: availableDriverId,
+      driverId: bestDriver,
       status: "ACCEPTED"
     });
 
@@ -116,7 +153,10 @@ app.post("/api/ride", async (req, res) => {
     io.emit("ride:new", ride);
   }
 
-  res.json(ride);
+  res.json({
+    ride,
+    eta: bestDistance !== Infinity ? `${Math.round(bestDistance * 3)} min` : null
+  });
 });
 
 // =====================
@@ -128,7 +168,7 @@ app.get("/api/rides", async (req, res) => {
 });
 
 // =====================
-// STATUS UPDATE (SAFE)
+// STATUS UPDATE
 // =====================
 app.patch("/api/ride/:id/status", async (req, res) => {
   const { status } = req.body;
@@ -136,14 +176,12 @@ app.patch("/api/ride/:id/status", async (req, res) => {
   const ride = await Ride.findById(req.params.id);
   if (!ride) return res.status(404).json({ error: "Not found" });
 
-  // 🚨 BLOCK updates if no driver
   if (ride.status === "NO_DRIVER_AVAILABLE") {
     return res.status(400).json({ error: "No driver assigned" });
   }
 
   ride.status = status;
 
-  // free driver when finished
   if (status === "COMPLETED" && ride.driverId) {
     if (onlineDrivers[ride.driverId]) {
       onlineDrivers[ride.driverId].busy = false;
@@ -161,5 +199,5 @@ app.patch("/api/ride/:id/status", async (req, res) => {
 // START
 // =====================
 server.listen(3000, () => {
-  console.log("🚀 Server running");
+  console.log("🚀 Server running with Step E logic");
 });
