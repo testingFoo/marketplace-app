@@ -31,12 +31,12 @@ console.log("MONGO_URI exists?", !!MONGO_URI);
 mongoose.connect(MONGO_URI)
   .then(() => console.log("🟢 MongoDB Connected"))
   .catch(err => {
-    console.log("🔴 MongoDB Connection Error:");
+    console.log("🔴 MongoDB Error:");
     console.log(err);
   });
 
 // =====================
-// Schema (STEP 4)
+// Schema
 // =====================
 const rideSchema = new mongoose.Schema({
   userId: String,
@@ -56,7 +56,7 @@ const rideSchema = new mongoose.Schema({
 const Ride = mongoose.model("Ride", rideSchema);
 
 // =====================
-// Health Check
+// HEALTH CHECK (DEBUG)
 // =====================
 app.get("/api/health", (req, res) => {
   res.json({
@@ -66,20 +66,13 @@ app.get("/api/health", (req, res) => {
 });
 
 // =====================
-// Root
-// =====================
-app.get("/", (req, res) => {
-  res.send("🚀 Uber Clone Backend Running");
-});
-
-// =====================
-// Create Ride (NO CHANGES except driverId optional)
+// CREATE RIDE
 // =====================
 app.post("/api/ride", async (req, res) => {
   try {
     const { pickup, destination, userId } = req.body;
 
-    console.log("📥 Ride create:", req.body);
+    console.log("📥 Create ride:", req.body);
 
     if (!pickup || !destination || !userId) {
       return res.status(400).json({
@@ -96,32 +89,30 @@ app.post("/api/ride", async (req, res) => {
     res.json(ride);
 
   } catch (err) {
-    console.log("❌ Create Ride Error:", err);
+    console.log("❌ Create error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 // =====================
-// Get Rides
+// GET RIDES
 // =====================
 app.get("/api/rides", async (req, res) => {
   try {
     const rides = await Ride.find().sort({ createdAt: -1 });
     res.json(rides);
   } catch (err) {
-    console.log("❌ Get Rides Error:", err);
+    console.log("❌ Get rides error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 // =====================
-// UPDATE STATUS (STEP 4 - LOCK SYSTEM)
+// UPDATE STATUS (LOCK LOGIC)
 // =====================
 app.patch("/api/ride/:id/status", async (req, res) => {
   try {
     const { status, driverId } = req.body;
-
-    console.log("📌 Status Update:", req.params.id, status);
 
     const ride = await Ride.findById(req.params.id);
 
@@ -129,10 +120,10 @@ app.patch("/api/ride/:id/status", async (req, res) => {
       return res.status(404).json({ error: "Ride not found" });
     }
 
-    // 🚨 LOCK LOGIC (IMPORTANT)
+    // LOCK: only one driver can accept
     if (status === "ACCEPTED") {
       if (ride.status !== "REQUESTED") {
-        return res.status(400).json({ error: "Already accepted" });
+        return res.status(400).json({ error: "Already taken" });
       }
 
       ride.status = "ACCEPTED";
@@ -146,13 +137,13 @@ app.patch("/api/ride/:id/status", async (req, res) => {
     res.json(ride);
 
   } catch (err) {
-    console.log("❌ Update Error:", err);
+    console.log("❌ Update error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 // =====================
-// START SERVER
+// START
 // =====================
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
