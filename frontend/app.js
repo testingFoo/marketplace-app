@@ -139,3 +139,9 @@ function loadRides() {
 // =====================
 checkBackend();
 loadRides();
+
+window.createRide = createRide;
+window.updateStatus = updateStatus;
+window.checkBackend = checkBackend;
+window.loadRides = loadRides;
+window.setMode = setMode;
