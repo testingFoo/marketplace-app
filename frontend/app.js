@@ -193,3 +193,7 @@ window.setMode = setMode;
 window.toggleDriver = toggleDriver;
 window.createRide = createRide;
 window.updateStatus = updateStatus;
+window.checkBackend = checkBackend;
+window.createRide = createRide;
+window.loadRides = loadRides;
+
