@@ -4,26 +4,19 @@ const mongoose = require("mongoose");
 
 const app = express();
 
-// Middleware
+
 app.use(express.json());
 app.use(cors({
   origin: "https://marketplace-app-kohl.vercel.app"
 }));
 
-// PORT (Render provides this)
 const PORT = process.env.PORT || 3000;
 
----
-
-// MongoDB Connection
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
   .catch((err) => console.log("MongoDB Error:", err));
 
----
-
-// Ride Schema
 
 const rideSchema = new mongoose.Schema({
   pickup: {
@@ -53,7 +46,6 @@ const rideSchema = new mongoose.Schema({
 
 const Ride = mongoose.model("Ride", rideSchema);
 
-// Health Check
 
 app.get("/api/health", (req, res) => {
   res.json({
@@ -63,15 +55,11 @@ app.get("/api/health", (req, res) => {
 });
 
 
-// Root Route
 
 app.get("/", (req, res) => {
   res.send("Uber Backend Running 🚀");
 });
 
----
-
-// Create Ride (MongoDB)
 
 app.post("/api/ride", async (req, res) => {
   try {
@@ -95,7 +83,6 @@ app.post("/api/ride", async (req, res) => {
 });
 
 
-//  Update Ride Status (Uber Logic)
 
 app.patch("/api/ride/:id/status", async (req, res) => {
   try {
@@ -115,7 +102,6 @@ app.patch("/api/ride/:id/status", async (req, res) => {
 
 
 
-//  Get All Rides
 
 app.get("/api/rides", async (req, res) => {
   try {
@@ -127,7 +113,6 @@ app.get("/api/rides", async (req, res) => {
 });
 
 
-//  Start Server
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
