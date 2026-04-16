@@ -26,21 +26,21 @@ console.log("🧠 Server starting...");
 console.log("MONGO_URI exists?", !!MONGO_URI);
 
 // =====================
-// MongoDB Connection
+// MongoDB
 // =====================
 mongoose.connect(MONGO_URI)
   .then(() => console.log("🟢 MongoDB Connected"))
-  .catch((err) => {
+  .catch(err => {
     console.log("🔴 MongoDB Connection Error:");
     console.log(err);
   });
 
 // =====================
-// Schema (STEP 3 UPDATED)
+// Schema (STEP 4)
 // =====================
 const rideSchema = new mongoose.Schema({
   userId: String,
-  driverId: String, // NEW (who accepted it)
+  driverId: String,
   pickup: String,
   destination: String,
   status: {
@@ -56,10 +56,8 @@ const rideSchema = new mongoose.Schema({
 const Ride = mongoose.model("Ride", rideSchema);
 
 // =====================
-// Routes
+// Health Check
 // =====================
-
-// Health check
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
@@ -67,19 +65,21 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// =====================
 // Root
+// =====================
 app.get("/", (req, res) => {
   res.send("🚀 Uber Clone Backend Running");
 });
 
 // =====================
-// Create Ride (STEP 3)
+// Create Ride (NO CHANGES except driverId optional)
 // =====================
 app.post("/api/ride", async (req, res) => {
   try {
     const { pickup, destination, userId } = req.body;
 
-    console.log("📥 Create Ride Request:", req.body);
+    console.log("📥 Ride create:", req.body);
 
     if (!pickup || !destination || !userId) {
       return res.status(400).json({
@@ -96,14 +96,13 @@ app.post("/api/ride", async (req, res) => {
     res.json(ride);
 
   } catch (err) {
-    console.log("❌ Create Ride Error:");
-    console.log(err);
+    console.log("❌ Create Ride Error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 // =====================
-// Get All Rides
+// Get Rides
 // =====================
 app.get("/api/rides", async (req, res) => {
   try {
@@ -116,11 +115,13 @@ app.get("/api/rides", async (req, res) => {
 });
 
 // =====================
-// Update Status (Driver)
+// UPDATE STATUS (STEP 4 - LOCK SYSTEM)
 // =====================
 app.patch("/api/ride/:id/status", async (req, res) => {
   try {
     const { status, driverId } = req.body;
+
+    console.log("📌 Status Update:", req.params.id, status);
 
     const ride = await Ride.findById(req.params.id);
 
@@ -145,13 +146,13 @@ app.patch("/api/ride/:id/status", async (req, res) => {
     res.json(ride);
 
   } catch (err) {
-    console.log("❌ Status Update Error:", err);
+    console.log("❌ Update Error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 // =====================
-// Start Server
+// START SERVER
 // =====================
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
