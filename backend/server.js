@@ -22,7 +22,7 @@ const MONGO_URI = process.env.MONGO_URI;
 // =====================
 // DEBUG
 // =====================
-console.log("🧠 Server starting...");
+console.log("🧠 Server booting...");
 console.log("MONGO_URI exists?", !!MONGO_URI);
 
 // =====================
@@ -36,17 +36,31 @@ mongoose.connect(MONGO_URI)
   });
 
 // =====================
+// TRIP STATE MACHINE
+// =====================
+const RIDE_STATES = {
+  REQUESTED: "REQUESTED",
+  ACCEPTED: "ACCEPTED",
+  ARRIVING: "ARRIVING",
+  IN_PROGRESS: "IN_PROGRESS",
+  COMPLETED: "COMPLETED"
+};
+
+// =====================
 // Schema
 // =====================
 const rideSchema = new mongoose.Schema({
   userId: String,
   driverId: String,
+
   pickup: String,
   destination: String,
+
   status: {
     type: String,
-    default: "REQUESTED"
+    default: RIDE_STATES.REQUESTED
   },
+
   createdAt: {
     type: Date,
     default: Date.now
@@ -56,7 +70,7 @@ const rideSchema = new mongoose.Schema({
 const Ride = mongoose.model("Ride", rideSchema);
 
 // =====================
-// HEALTH CHECK (DEBUG)
+// HEALTH CHECK
 // =====================
 app.get("/api/health", (req, res) => {
   res.json({
@@ -72,25 +86,24 @@ app.post("/api/ride", async (req, res) => {
   try {
     const { pickup, destination, userId } = req.body;
 
-    console.log("📥 Create ride:", req.body);
+    console.log("📥 New ride:", req.body);
 
     if (!pickup || !destination || !userId) {
-      return res.status(400).json({
-        error: "pickup, destination, userId required"
-      });
+      return res.status(400).json({ error: "missing fields" });
     }
 
     const ride = await Ride.create({
       pickup,
       destination,
-      userId
+      userId,
+      status: RIDE_STATES.REQUESTED
     });
 
     res.json(ride);
 
   } catch (err) {
     console.log("❌ Create error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "server error" });
   }
 });
 
@@ -98,17 +111,35 @@ app.post("/api/ride", async (req, res) => {
 // GET RIDES
 // =====================
 app.get("/api/rides", async (req, res) => {
-  try {
-    const rides = await Ride.find().sort({ createdAt: -1 });
-    res.json(rides);
-  } catch (err) {
-    console.log("❌ Get rides error:", err);
-    res.status(500).json({ error: "Server error" });
-  }
+  const rides = await Ride.find().sort({ createdAt: -1 });
+  res.json(rides);
 });
 
 // =====================
-// UPDATE STATUS (LOCK LOGIC)
+// DRIVER ACTIVE CHECK (ONE RIDE ONLY)
+// =====================
+async function driverHasActiveRide(driverId) {
+  const active = await Ride.findOne({
+    driverId,
+    status: { $in: ["ACCEPTED", "ARRIVING", "IN_PROGRESS"] }
+  });
+
+  return !!active;
+}
+
+// =====================
+// STATE MACHINE RULES
+// =====================
+const validTransitions = {
+  REQUESTED: ["ACCEPTED"],
+  ACCEPTED: ["ARRIVING"],
+  ARRIVING: ["IN_PROGRESS"],
+  IN_PROGRESS: ["COMPLETED"],
+  COMPLETED: []
+};
+
+// =====================
+// UPDATE RIDE STATUS (CORE ENGINE)
 // =====================
 app.patch("/api/ride/:id/status", async (req, res) => {
   try {
@@ -120,17 +151,38 @@ app.patch("/api/ride/:id/status", async (req, res) => {
       return res.status(404).json({ error: "Ride not found" });
     }
 
-    // LOCK: only one driver can accept
+    const current = ride.status;
+
+    console.log(`📌 Transition: ${current} → ${status}`);
+
+    // =====================
+    // VALID STATE CHECK
+    // =====================
+    if (!validTransitions[current].includes(status)) {
+      return res.status(400).json({
+        error: `Invalid transition: ${current} → ${status}`
+      });
+    }
+
+    // =====================
+    // DRIVER ACCEPT RULE
+    // =====================
     if (status === "ACCEPTED") {
       if (ride.status !== "REQUESTED") {
         return res.status(400).json({ error: "Already taken" });
       }
 
-      ride.status = "ACCEPTED";
+      if (await driverHasActiveRide(driverId)) {
+        return res.status(400).json({ error: "Driver already on trip" });
+      }
+
       ride.driverId = driverId;
-    } else {
-      ride.status = status;
     }
+
+    // =====================
+    // STATUS UPDATE
+    // =====================
+    ride.status = status;
 
     await ride.save();
 
@@ -138,13 +190,13 @@ app.patch("/api/ride/:id/status", async (req, res) => {
 
   } catch (err) {
     console.log("❌ Update error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "server error" });
   }
 });
 
 // =====================
-// START
+// START SERVER
 // =====================
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Server running on ${PORT}`);
 });
