@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
   <title>Uber Clone Debug</title>
+
+  <!-- LEAFLET -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
 
   <style>
     body {
@@ -22,6 +24,12 @@
       padding: 8px 12px;
       margin: 3px;
       cursor: pointer;
+    }
+
+    input {
+      padding: 8px;
+      width: 250px;
+      margin: 4px 0;
     }
 
     pre {
@@ -47,6 +55,13 @@
       padding: 10px;
       border: 1px dashed #999;
     }
+
+    #map {
+      height: 350px;
+      width: 100%;
+      margin-top: 10px;
+      border: 1px solid #ccc;
+    }
   </style>
 </head>
 
@@ -59,7 +74,6 @@
     <div id="status" class="status">⏳ Starting...</div>
 
     <button onclick="checkBackend()">Check Backend</button>
-    <button onclick="createRide()">Create Ride</button>
     <button onclick="loadRides()">Refresh Rides</button>
   </div>
 
@@ -72,7 +86,6 @@
 
     <br><br>
 
-    <!-- 🔥 FIXED DYNAMIC LABEL -->
     <span id="modeLabel">Current: RIDER</span>
 
     <br><br>
@@ -80,29 +93,36 @@
     <button id="driverToggle" onclick="toggleDriver()">Go ONLINE</button>
   </div>
 
-  <h3>🚗 Create Ride</h3>
+  <!-- ADDRESS INPUTS (STEP G FEATURE) -->
+  <h3>📍 Pickup</h3>
+  <input id="pickup" placeholder="Search pickup address..." />
+  <button onclick="handlePickupSearch()">Search</button>
 
-  <input id="pickup" placeholder="Pickup location" />
-  <br/><br/>
-  <input id="destination" placeholder="Destination" />
-  <br/><br/>
+  <h3>📍 Destination</h3>
+  <input id="destination" placeholder="Search destination address..." />
+  <button onclick="handleDropSearch()">Search</button>
 
-  <button onclick="createRide()">Create Ride</button>
+  <br><br>
+
+  <button onclick="createRide()">🚗 Create Ride</button>
 
   <!-- RIDES -->
   <h3>🚗 Rides</h3>
   <div id="rides"></div>
 
+  <!-- MAP -->
   <h3>🗺️ Live Map</h3>
-<div id="map" style="height: 300px; width: 100%;"></div>
+  <div id="map"></div>
 
-  
   <!-- DEBUG -->
   <h3>🧠 Debug Console</h3>
   <pre id="log"></pre>
 
+  <!-- SCRIPTS -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- YOUR APP -->
   <script src="app.js"></script>
 
 </body>
