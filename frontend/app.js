@@ -6,45 +6,16 @@ let driverOnline = false;
 let pickup = null;
 let drop = null;
 
-let userId = localStorage.getItem("userId") || ("user_" + Date.now());
-localStorage.setItem("userId", userId);
-
-let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
-localStorage.setItem("driverId", driverId);
-
-// =====================
-// DEBUG
-// =====================
-function log(msg) {
-  const el = document.getElementById("log");
-  if (el) el.innerText += msg + "\n";
-}
-
-function setStatus(msg) {
-  document.getElementById("status").innerText = msg;
-}
-
 // =====================
 // MAP
 // =====================
 let map;
+let driverMarkers = {};
 
 function initMap() {
   map = L.map("map").setView([52.2297, 21.0122], 12);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
-
-  map.on("click", (e) => {
-    const { lat, lng } = e.latlng;
-
-    if (!pickup) {
-      pickup = { lat, lng };
-      document.getElementById("pickup").value = `${lat},${lng}`;
-    } else {
-      drop = { lat, lng };
-      document.getElementById("destination").value = `${lat},${lng}`;
-    }
-  });
 }
 
 // =====================
@@ -55,8 +26,41 @@ let socket;
 function initSocket() {
   socket = io(API);
 
-  socket.on("ride:new", () => loadRides());
-  socket.on("ride:update", () => loadRides());
+  socket.on("driver:move", (d) => {
+    if (!driverMarkers[d.driverId]) {
+      driverMarkers[d.driverId] = L.marker([d.lat, d.lng]).addTo(map);
+    } else {
+      driverMarkers[d.driverId].setLatLng([d.lat, d.lng]);
+    }
+  });
+
+  socket.on("ride:new", loadRides);
+  socket.on("ride:update", loadRides);
+}
+
+// =====================
+// SEARCH (FREE Nominatim)
+// =====================
+async function search(q) {
+  const r = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=json&q=${q}`
+  );
+  return r.json();
+}
+
+// =====================
+// PICKUP / DROP
+// =====================
+async function setPickup() {
+  const q = document.getElementById("pickup").value;
+  const r = await search(q);
+  if (r.length) pickup = { lat: +r[0].lat, lng: +r[0].lon };
+}
+
+async function setDrop() {
+  const q = document.getElementById("destination").value;
+  const r = await search(q);
+  if (r.length) drop = { lat: +r[0].lat, lng: +r[0].lon };
 }
 
 // =====================
@@ -67,34 +71,25 @@ function createRide() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      userId,
+      userId: "u1",
       pickup: document.getElementById("pickup").value,
       drop: document.getElementById("destination").value,
       pickupCoords: pickup,
-      dropCoords: drop
+      dropCoords: drop,
+      type: "X"
     })
-  }).then(loadRides);
+  });
 }
 
 // =====================
-// DRIVER MODE
+// DRIVER
 // =====================
 function toggleDriver() {
   driverOnline = !driverOnline;
-
-  socket.emit(driverOnline ? "driver:online" : "driver:offline", driverId);
+  socket.emit(driverOnline ? "driver:online" : "driver:offline", "d1");
 
   document.getElementById("driverToggle").innerText =
-    driverOnline ? "Go OFFLINE" : "Go ONLINE";
-}
-
-// =====================
-// MODE
-// =====================
-function setMode(m) {
-  mode = m;
-  document.getElementById("modeLabel").innerText = "Current: " + m.toUpperCase();
-  loadRides();
+    driverOnline ? "OFFLINE" : "ONLINE";
 }
 
 // =====================
@@ -105,11 +100,18 @@ function updateStatus(id, status) {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status })
-  }).then(loadRides);
+  });
 }
 
 // =====================
-// LOAD RIDES (CRITICAL FIX)
+// CANCEL
+// =====================
+function cancelRide(id) {
+  fetch(`${API}/api/ride/${id}/cancel`, { method: "PATCH" });
+}
+
+// =====================
+// LOAD RIDES
 // =====================
 function loadRides() {
   fetch(`${API}/api/rides`)
@@ -128,29 +130,27 @@ function loadRides() {
         );
       }
 
-      if (mode === "rider") {
-        filtered = data.filter(r => r.userId === userId);
-      }
-
       filtered.forEach(r => {
         const div = document.createElement("div");
-        div.className = "ride";
 
         div.innerHTML = `
           <b>${r.pickupText || r.pickup} → ${r.dropText || r.drop}</b><br/>
           Status: ${r.status}<br/>
+          Fare: ${r.fare || 0} PLN<br/>
 
           ${r.status === "ACCEPTED"
-            ? `<button onclick="updateStatus('${r._id}','ARRIVING')">Start Arriving</button>`
+            ? `<button onclick="updateStatus('${r._id}','ARRIVING')">Start</button>`
             : ""}
 
           ${r.status === "ARRIVING"
-            ? `<button onclick="updateStatus('${r._id}','IN_PROGRESS')">Start Ride</button>`
+            ? `<button onclick="updateStatus('${r._id}','IN_PROGRESS')">Drive</button>`
             : ""}
 
           ${r.status === "IN_PROGRESS"
-            ? `<button onclick="updateStatus('${r._id}','COMPLETED')">Complete</button>`
+            ? `<button onclick="updateStatus('${r._id}','COMPLETED')">Finish</button>`
             : ""}
+
+          <button onclick="cancelRide('${r._id}')">Cancel</button>
         `;
 
         box.appendChild(div);
@@ -167,9 +167,9 @@ window.onload = () => {
   loadRides();
 };
 
-// GLOBALS
-window.setMode = setMode;
-window.toggleDriver = toggleDriver;
+// expose
 window.createRide = createRide;
+window.toggleDriver = toggleDriver;
 window.updateStatus = updateStatus;
+window.cancelRide = cancelRide;
 window.loadRides = loadRides;
