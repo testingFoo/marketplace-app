@@ -8,20 +8,20 @@ const app = express();
 const server = http.createServer(app);
 
 // =====================
-// SOCKET.IO (🔥 FIXED CORS)
+// SOCKET.IO
 // =====================
 const io = new Server(server, {
   cors: {
-    origin: "*", // 🔥 allow all (for now)
+    origin: "*",
     methods: ["GET", "POST", "PATCH"]
   }
 });
 
 // =====================
-// MIDDLEWARE (🔥 FIXED CORS)
+// MIDDLEWARE
 // =====================
 app.use(express.json());
-app.use(cors()); // 🔥 allow all (for now)
+app.use(cors());
 
 // =====================
 // ENV
@@ -46,13 +46,36 @@ mongoose.connect(MONGO_URI)
   });
 
 // =====================
+// DRIVER MEMORY (🔥 NEW)
+// =====================
+let onlineDrivers = [];
+
+// =====================
 // SOCKET CONNECTION
 // =====================
 io.on("connection", (socket) => {
   console.log("🟢 Client connected:", socket.id);
 
+  socket.on("driver:online", (driverId) => {
+    console.log("🟢 Driver online:", driverId);
+
+    onlineDrivers.push({
+      id: driverId,
+      socketId: socket.id,
+      busy: false
+    });
+  });
+
+  socket.on("driver:offline", (driverId) => {
+    console.log("🔴 Driver offline:", driverId);
+
+    onlineDrivers = onlineDrivers.filter(d => d.id !== driverId);
+  });
+
   socket.on("disconnect", () => {
     console.log("🔴 Client disconnected:", socket.id);
+
+    onlineDrivers = onlineDrivers.filter(d => d.socketId !== socket.id);
   });
 });
 
@@ -98,26 +121,39 @@ app.get("/api/health", (req, res) => {
 });
 
 // =====================
-// CREATE RIDE
+// CREATE RIDE (🔥 AUTO ASSIGN)
 // =====================
 app.post("/api/ride", async (req, res) => {
   try {
     const { pickup, destination, userId } = req.body;
 
+    const availableDriver = onlineDrivers.find(d => !d.busy);
+
+    let driverId = null;
+    let status = "REQUESTED";
+
+    if (availableDriver) {
+      driverId = availableDriver.id;
+      status = "ACCEPTED";
+      availableDriver.busy = true;
+    }
+
     const ride = await Ride.create({
       pickup,
       destination,
-      userId
+      userId,
+      driverId,
+      status
     });
 
-    console.log("🚗 New ride created:", ride._id);
+    console.log("🚗 Ride created:", ride._id);
 
-    // 🔥 REAL-TIME
     io.emit("ride:new", ride);
 
     res.json(ride);
+
   } catch (err) {
-    console.log("❌ Create ride error:", err);
+    console.log("❌ Create error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -136,29 +172,6 @@ app.get("/api/rides", async (req, res) => {
 });
 
 // =====================
-// DRIVER LIMIT CHECK
-// =====================
-async function driverHasActiveRide(driverId) {
-  const active = await Ride.findOne({
-    driverId,
-    status: { $in: ["ACCEPTED", "ARRIVING", "IN_PROGRESS"] }
-  });
-
-  return !!active;
-}
-
-// =====================
-// STATE TRANSITIONS
-// =====================
-const validTransitions = {
-  REQUESTED: ["ACCEPTED"],
-  ACCEPTED: ["ARRIVING"],
-  ARRIVING: ["IN_PROGRESS"],
-  IN_PROGRESS: ["COMPLETED"],
-  COMPLETED: []
-};
-
-// =====================
 // UPDATE STATUS
 // =====================
 app.patch("/api/ride/:id/status", async (req, res) => {
@@ -167,32 +180,20 @@ app.patch("/api/ride/:id/status", async (req, res) => {
 
     const ride = await Ride.findById(req.params.id);
 
-    if (!ride) {
-      return res.status(404).json({ error: "Ride not found" });
-    }
-
-    const current = ride.status;
-
-    if (!validTransitions[current].includes(status)) {
-      return res.status(400).json({ error: "Invalid transition" });
-    }
-
-    // 🚗 Assign driver only when accepting
-    if (status === "ACCEPTED") {
-      if (await driverHasActiveRide(driverId)) {
-        return res.status(400).json({ error: "Driver already on trip" });
-      }
-
-      ride.driverId = driverId;
-    }
+    if (!ride) return res.status(404).json({ error: "Ride not found" });
 
     ride.status = status;
+
+    // 🔥 FREE DRIVER WHEN DONE
+    if (status === "COMPLETED") {
+      const driver = onlineDrivers.find(d => d.id === ride.driverId);
+      if (driver) driver.busy = false;
+    }
 
     await ride.save();
 
     console.log(`🔄 Ride ${ride._id} → ${status}`);
 
-    // 🔥 REAL-TIME
     io.emit("ride:update", ride);
 
     res.json(ride);
