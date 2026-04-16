@@ -19,23 +19,22 @@ app.use(cors());
 // DB
 // =====================
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("🟢 MongoDB Connected"))
+  .then(() => console.log("🟢 Mongo Connected"))
   .catch(err => console.log("🔴 Mongo Error", err));
 
 // =====================
 // STATE
 // =====================
-let onlineDrivers = {};
-let driverLocations = {};
+let drivers = {};        // { driverId: { socketId, busy, lat, lng } }
 
 // =====================
 // ROUTE ENGINE
 // =====================
-async function getRoute(aLat, aLng, bLat, bLng) {
+async function getRoute(p1, p2) {
   try {
     const url =
       `https://router.project-osrm.org/route/v1/driving/` +
-      `${aLng},${aLat};${bLng},${bLat}?overview=full&geometries=geojson`;
+      `${p1.lng},${p1.lat};${p2.lng},${p2.lat}?overview=full&geometries=geojson`;
 
     const res = await axios.get(url);
     const route = res.data.routes?.[0];
@@ -54,94 +53,81 @@ async function getRoute(aLat, aLng, bLat, bLng) {
 }
 
 // =====================
-// SOCKET
-// =====================
-io.on("connection", (socket) => {
-
-  socket.on("driver:online", (driverId) => {
-    onlineDrivers[driverId] = { socketId: socket.id, busy: false };
-    console.log("🟢 Driver online", driverId);
-  });
-
-  socket.on("driver:offline", (driverId) => {
-    delete onlineDrivers[driverId];
-    delete driverLocations[driverId];
-    console.log("🔴 Driver offline", driverId);
-  });
-
-  socket.on("driver:location", ({ driverId, lat, lng }) => {
-    driverLocations[driverId] = { lat, lng };
-    io.emit("driver:move", { driverId, lat, lng });
-  });
-});
-
-// =====================
 // MODEL
 // =====================
 const rideSchema = new mongoose.Schema({
   userId: String,
   driverId: String,
-  pickup: String,
-  destination: String,
+  pickupText: String,
+  dropText: String,
+  pickup: Object,
+  drop: Object,
   status: String,
+  route: Object,
   createdAt: { type: Date, default: Date.now }
 });
 
 const Ride = mongoose.model("Ride", rideSchema);
 
 // =====================
-// HEALTH
+// SOCKET
 // =====================
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "ok",
-    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected"
+io.on("connection", (socket) => {
+
+  socket.on("driver:online", (driverId) => {
+    drivers[driverId] = { socketId: socket.id, busy: false };
+    console.log("Driver online:", driverId);
+  });
+
+  socket.on("driver:offline", (driverId) => {
+    delete drivers[driverId];
+  });
+
+  socket.on("driver:location", ({ driverId, lat, lng }) => {
+    if (drivers[driverId]) {
+      drivers[driverId].lat = lat;
+      drivers[driverId].lng = lng;
+    }
+
+    io.emit("driver:move", { driverId, lat, lng });
   });
 });
 
 // =====================
-// CREATE RIDE (FIXED FLOW)
+// HEALTH
+// =====================
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", db: mongoose.connection.readyState });
+});
+
+// =====================
+// CREATE RIDE (CORE DISPATCH)
 // =====================
 app.post("/api/ride", async (req, res) => {
-  const { pickup, destination, userId, pickupCoords, dropCoords } = req.body;
+  const { userId, pickup, drop, pickupCoords, dropCoords } = req.body;
 
-  let bestDriver = null;
+  let assignedDriver = null;
 
-  for (const id of Object.keys(onlineDrivers)) {
-    if (!onlineDrivers[id].busy) {
-      bestDriver = id;
+  for (const id of Object.keys(drivers)) {
+    if (!drivers[id].busy) {
+      assignedDriver = id;
+      drivers[id].busy = true;
       break;
     }
   }
 
-  let ride;
+  const route = await getRoute(pickupCoords, dropCoords);
 
-  if (bestDriver) {
-    onlineDrivers[bestDriver].busy = true;
-
-    ride = await Ride.create({
-      pickup,
-      destination,
-      userId,
-      driverId: bestDriver,
-      status: "ACCEPTED"
-    });
-  } else {
-    ride = await Ride.create({
-      pickup,
-      destination,
-      userId,
-      driverId: null,
-      status: "NO_DRIVER_AVAILABLE"
-    });
-  }
-
-  const route = await getRoute(
-    pickupCoords?.lat || 52.2297,
-    pickupCoords?.lng || 21.0122,
-    dropCoords?.lat || 52.23,
-    dropCoords?.lng || 21.01
-  );
+  const ride = await Ride.create({
+    userId,
+    driverId: assignedDriver,
+    pickupText: pickup,
+    dropText: drop,
+    pickup: pickupCoords,
+    drop: dropCoords,
+    status: assignedDriver ? "ACCEPTED" : "NO_DRIVER_AVAILABLE",
+    route
+  });
 
   io.emit("ride:new", { ride, route });
 
@@ -152,27 +138,34 @@ app.post("/api/ride", async (req, res) => {
 // GET RIDES
 // =====================
 app.get("/api/rides", async (req, res) => {
-  res.json(await Ride.find().sort({ createdAt: -1 }));
+  const rides = await Ride.find().sort({ createdAt: -1 });
+  res.json(rides);
 });
 
 // =====================
-// STATUS UPDATE (FULL FIX)
+// STATUS FLOW (STRICT)
 // =====================
+const flow = {
+  ACCEPTED: "ARRIVING",
+  ARRIVING: "IN_PROGRESS",
+  IN_PROGRESS: "COMPLETED"
+};
+
 app.patch("/api/ride/:id/status", async (req, res) => {
   const { status } = req.body;
 
   const ride = await Ride.findById(req.params.id);
   if (!ride) return res.status(404).json({ error: "Not found" });
 
-  if (ride.status === "NO_DRIVER_AVAILABLE") {
-    return res.status(400).json({ error: "No driver" });
+  if (!flow[ride.status] || flow[ride.status] !== status) {
+    return res.status(400).json({ error: "Invalid transition" });
   }
 
   ride.status = status;
 
   if (status === "COMPLETED" && ride.driverId) {
-    if (onlineDrivers[ride.driverId]) {
-      onlineDrivers[ride.driverId].busy = false;
+    if (drivers[ride.driverId]) {
+      drivers[ride.driverId].busy = false;
     }
   }
 
@@ -187,5 +180,5 @@ app.patch("/api/ride/:id/status", async (req, res) => {
 // START
 // =====================
 server.listen(3000, () => {
-  console.log("🚀 STEP H BACKEND READY");
+  console.log("🚀 Uber backend running (FINAL H)");
 });
