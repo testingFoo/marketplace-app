@@ -192,6 +192,17 @@ function loadRides() {
     });
 }
 
+// =====================
+// MODE UI UPDATE FIX
+// =====================
+function updateModeLabel() {
+  const el = document.getElementById("modeLabel");
+  if (el) {
+    el.innerText = "Current: " + mode.toUpperCase();
+  }
+}
+
+
 function updateStatus(id, status) {
   fetch(`${API}/api/ride/${id}/status`, {
     method: "PATCH",
