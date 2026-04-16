@@ -18,17 +18,11 @@ app.use(express.json());
 app.use(cors());
 
 // =====================
-// ENV
-// =====================
-const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI;
-
-// =====================
 // DB
 // =====================
-mongoose.connect(MONGO_URI)
+mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("🟢 MongoDB Connected"))
-  .catch(err => console.log("🔴 MongoDB Error:", err));
+  .catch(err => console.log("🔴 Mongo Error", err));
 
 // =====================
 // DRIVER STATE
@@ -37,24 +31,18 @@ let onlineDrivers = {};
 let driverLocations = {};
 
 // =====================
-// SOCKET
+// SOCKET EVENTS
 // =====================
 io.on("connection", (socket) => {
-  console.log("🟢 Client connected:", socket.id);
 
   socket.on("driver:online", (driverId) => {
-    onlineDrivers[driverId] = {
-      socketId: socket.id,
-      busy: false
-    };
-
+    onlineDrivers[driverId] = { socketId: socket.id, busy: false };
     console.log("🟢 Driver online:", driverId);
   });
 
   socket.on("driver:offline", (driverId) => {
     delete onlineDrivers[driverId];
     delete driverLocations[driverId];
-
     console.log("🔴 Driver offline:", driverId);
   });
 
@@ -63,27 +51,19 @@ io.on("connection", (socket) => {
 
     driverLocations[driverId] = { lat, lng };
 
-    io.emit("driver:move", {
-      driverId,
-      lat,
-      lng
-    });
-  });
-
-  socket.on("disconnect", () => {
-    console.log("🔴 Socket disconnected:", socket.id);
+    io.emit("driver:move", { driverId, lat, lng });
   });
 });
 
 // =====================
-// RIDE MODEL
+// MODEL
 // =====================
 const rideSchema = new mongoose.Schema({
   userId: String,
   driverId: String,
   pickup: String,
   destination: String,
-  status: { type: String, default: "REQUESTED" },
+  status: String,
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -100,31 +80,41 @@ app.get("/api/health", (req, res) => {
 });
 
 // =====================
-// CREATE RIDE (AUTO ASSIGN)
+// CREATE RIDE (SMART DISPATCH)
 // =====================
 app.post("/api/ride", async (req, res) => {
   const { pickup, destination, userId } = req.body;
 
-  let driverId = null;
-  let status = "REQUESTED";
+  const availableDriverId = Object.keys(onlineDrivers).find(
+    d => !onlineDrivers[d].busy
+  );
 
-  const availableDriver = Object.keys(onlineDrivers)[0];
+  let ride;
 
-  if (availableDriver) {
-    driverId = availableDriver;
-    status = "ACCEPTED";
-    onlineDrivers[availableDriver].busy = true;
+  if (availableDriverId) {
+    onlineDrivers[availableDriverId].busy = true;
+
+    ride = await Ride.create({
+      pickup,
+      destination,
+      userId,
+      driverId: availableDriverId,
+      status: "ACCEPTED"
+    });
+
+    io.emit("ride:new", ride);
+
+  } else {
+    ride = await Ride.create({
+      pickup,
+      destination,
+      userId,
+      driverId: null,
+      status: "NO_DRIVER_AVAILABLE"
+    });
+
+    io.emit("ride:new", ride);
   }
-
-  const ride = await Ride.create({
-    pickup,
-    destination,
-    userId,
-    driverId,
-    status
-  });
-
-  io.emit("ride:new", ride);
 
   res.json(ride);
 });
@@ -138,7 +128,7 @@ app.get("/api/rides", async (req, res) => {
 });
 
 // =====================
-// UPDATE STATUS
+// STATUS UPDATE (SAFE)
 // =====================
 app.patch("/api/ride/:id/status", async (req, res) => {
   const { status } = req.body;
@@ -146,8 +136,14 @@ app.patch("/api/ride/:id/status", async (req, res) => {
   const ride = await Ride.findById(req.params.id);
   if (!ride) return res.status(404).json({ error: "Not found" });
 
+  // 🚨 BLOCK updates if no driver
+  if (ride.status === "NO_DRIVER_AVAILABLE") {
+    return res.status(400).json({ error: "No driver assigned" });
+  }
+
   ride.status = status;
 
+  // free driver when finished
   if (status === "COMPLETED" && ride.driverId) {
     if (onlineDrivers[ride.driverId]) {
       onlineDrivers[ride.driverId].busy = false;
@@ -164,6 +160,6 @@ app.patch("/api/ride/:id/status", async (req, res) => {
 // =====================
 // START
 // =====================
-server.listen(PORT, () => {
-  console.log("🚀 Server running on", PORT);
+server.listen(3000, () => {
+  console.log("🚀 Server running");
 });
