@@ -9,7 +9,6 @@ const app = express();
 // =====================
 app.use(express.json());
 
-// CORS (your Vercel frontend)
 app.use(cors({
   origin: "https://marketplace-app-kohl.vercel.app"
 }));
@@ -21,7 +20,7 @@ const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI;
 
 // =====================
-// DEBUG (safe)
+// DEBUG
 // =====================
 console.log("🧠 Server starting...");
 console.log("MONGO_URI exists?", !!MONGO_URI);
@@ -30,16 +29,14 @@ console.log("MONGO_URI exists?", !!MONGO_URI);
 // MongoDB Connection
 // =====================
 mongoose.connect(MONGO_URI)
-  .then(() => {
-    console.log("🟢 MongoDB Connected");
-  })
+  .then(() => console.log("🟢 MongoDB Connected"))
   .catch((err) => {
     console.log("🔴 MongoDB Connection Error:");
     console.log(err);
   });
 
 // =====================
-// Ride Schema
+// Schema (STEP 3 UPDATED)
 // =====================
 const rideSchema = new mongoose.Schema({
   userId: String,
@@ -74,10 +71,14 @@ app.get("/", (req, res) => {
   res.send("🚀 Uber Clone Backend Running");
 });
 
-// Create ride
+// =====================
+// Create Ride (STEP 3)
+// =====================
 app.post("/api/ride", async (req, res) => {
   try {
     const { pickup, destination, userId } = req.body;
+
+    console.log("📥 Create Ride Request:", req.body);
 
     if (!pickup || !destination || !userId) {
       return res.status(400).json({
@@ -92,13 +93,17 @@ app.post("/api/ride", async (req, res) => {
     });
 
     res.json(ride);
+
   } catch (err) {
-    console.log("Create Ride Error:", err);
+    console.log("❌ Create Ride Error:");
+    console.log(err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// Get all rides
+// =====================
+// Get All Rides
+// =====================
 app.get("/api/rides", async (req, res) => {
   try {
     const rides = await Ride.find().sort({ createdAt: -1 });
@@ -109,10 +114,14 @@ app.get("/api/rides", async (req, res) => {
   }
 });
 
-// Update ride status
+// =====================
+// Update Status (Driver)
+// =====================
 app.patch("/api/ride/:id/status", async (req, res) => {
   try {
     const { status } = req.body;
+
+    console.log("📌 Status Update:", req.params.id, status);
 
     const ride = await Ride.findByIdAndUpdate(
       req.params.id,
@@ -121,14 +130,15 @@ app.patch("/api/ride/:id/status", async (req, res) => {
     );
 
     res.json(ride);
+
   } catch (err) {
-    console.log("❌ Update Status Error:", err);
+    console.log("❌ Status Update Error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 // =====================
-// Start server
+// Start Server
 // =====================
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
