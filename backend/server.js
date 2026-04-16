@@ -42,6 +42,7 @@ mongoose.connect(MONGO_URI)
 // Ride Schema
 // =====================
 const rideSchema = new mongoose.Schema({
+  userId: String,
   pickup: String,
   destination: String,
   status: {
