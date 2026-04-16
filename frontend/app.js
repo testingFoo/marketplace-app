@@ -1,5 +1,8 @@
 const API = "https://marketplace-app-m8ac.onrender.com";
 
+// =====================
+// STATE
+// =====================
 let mode = "rider";
 let driverOnline = false;
 
@@ -10,29 +13,86 @@ let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
 localStorage.setItem("driverId", driverId);
 
 // =====================
-// SOCKET
+// SAFE UI HELPERS (CRITICAL FIX)
 // =====================
-let socket = io(API);
+function setStatus(msg) {
+  const el = document.getElementById("status");
+  if (el) el.innerText = msg;
+  console.log("[STATUS]", msg);
+}
+
+function log(msg) {
+  const el = document.getElementById("log");
+  if (el) el.innerText += msg + "\n";
+  console.log("[LOG]", msg);
+}
 
 // =====================
-// MAP
+// SOCKET (SAFE INIT)
+// =====================
+let socket;
+
+function initSocket() {
+  try {
+    socket = io(API);
+
+    socket.on("connect", () => {
+      log("🟢 Socket connected");
+    });
+
+    socket.on("driver:move", (data) => {
+      const { driverId: id, lat, lng } = data;
+
+      if (!map) return;
+
+      if (!markers[id]) {
+        markers[id] = L.marker([lat, lng]).addTo(map);
+      } else {
+        markers[id].setLatLng([lat, lng]);
+      }
+    });
+
+    socket.on("ride:new", loadRides);
+    socket.on("ride:update", loadRides);
+
+  } catch (err) {
+    log("❌ Socket error: " + err);
+  }
+}
+
+// =====================
+// MAP (SAFE)
 // =====================
 let map;
 let markers = {};
 
-// =====================
-// INIT MAP
-// =====================
 function initMap() {
-  map = L.map("map").setView([52.2297, 21.0122], 12);
+  try {
+    if (typeof L === "undefined") {
+      log("❌ Leaflet not loaded");
+      return;
+    }
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "OpenStreetMap"
-  }).addTo(map);
+    const el = document.getElementById("map");
+    if (!el) {
+      log("❌ Map container missing");
+      return;
+    }
+
+    map = L.map("map").setView([52.2297, 21.0122], 12);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "OpenStreetMap"
+    }).addTo(map);
+
+    log("🗺️ Map initialized");
+  } catch (err) {
+    log("❌ Map error: " + err);
+  }
 }
 
 // =====================
-// DRIVER MOVEMENT (SIMULATION)
+// DRIVER MOVEMENT
 // =====================
 function startDriverMovement() {
   if (!driverOnline) return;
@@ -53,24 +113,6 @@ function startDriverMovement() {
 }
 
 // =====================
-// SOCKET EVENTS
-// =====================
-socket.on("driver:move", (data) => {
-  const { driverId: id, lat, lng } = data;
-
-  if (!map) return;
-
-  if (!markers[id]) {
-    markers[id] = L.marker([lat, lng]).addTo(map);
-  } else {
-    markers[id].setLatLng([lat, lng]);
-  }
-});
-
-socket.on("ride:new", loadRides);
-socket.on("ride:update", loadRides);
-
-// =====================
 // MODE
 // =====================
 function setMode(m) {
@@ -79,6 +121,17 @@ function setMode(m) {
   loadRides();
 }
 
+// =====================
+// MODE LABEL
+// =====================
+function updateModeLabel() {
+  const el = document.getElementById("modeLabel");
+  if (el) el.innerText = "Current: " + mode.toUpperCase();
+}
+
+// =====================
+// BACKEND CHECK
+// =====================
 function checkBackend() {
   fetch(`${API}/api/health`)
     .then(res => res.json())
@@ -93,36 +146,32 @@ function checkBackend() {
 }
 
 // =====================
-// MODE LABEL
-// =====================
-function updateModeLabel() {
-  const el = document.getElementById("modeLabel");
-  if (el) el.innerText = "Current: " + mode.toUpperCase();
-}
-
-// =====================
 // DRIVER TOGGLE
 // =====================
 function toggleDriver() {
   driverOnline = !driverOnline;
 
-  if (driverOnline) {
-    socket.emit("driver:online", driverId);
-    startDriverMovement();
-  } else {
-    socket.emit("driver:offline", driverId);
+  if (socket) {
+    if (driverOnline) {
+      socket.emit("driver:online", driverId);
+      startDriverMovement();
+      log("🟢 Driver ONLINE");
+    } else {
+      socket.emit("driver:offline", driverId);
+      log("🔴 Driver OFFLINE");
+    }
   }
 
-  document.getElementById("driverToggle").innerText =
-    driverOnline ? "Go OFFLINE" : "Go ONLINE";
+  const btn = document.getElementById("driverToggle");
+  if (btn) btn.innerText = driverOnline ? "Go OFFLINE" : "Go ONLINE";
 }
 
 // =====================
 // CREATE RIDE
 // =====================
 function createRide() {
-  const pickup = document.getElementById("pickup").value;
-  const destination = document.getElementById("destination").value;
+  const pickup = document.getElementById("pickup")?.value;
+  const destination = document.getElementById("destination")?.value;
 
   fetch(`${API}/api/ride`, {
     method: "POST",
@@ -150,6 +199,8 @@ function loadRides() {
     .then(res => res.json())
     .then(data => {
       const box = document.getElementById("rides");
+      if (!box) return;
+
       box.innerHTML = "";
 
       let filtered = data;
@@ -191,22 +242,23 @@ function loadRides() {
 }
 
 // =====================
-// INIT
+// INIT SAFE ENTRY
 // =====================
 window.onload = () => {
+  log("🟢 App initialized");
+
   initMap();
+  initSocket();
   updateModeLabel();
   loadRides();
 };
 
 // =====================
-// GLOBALS
+// GLOBAL EXPORTS (FIXED CLEAN)
 // =====================
 window.setMode = setMode;
 window.toggleDriver = toggleDriver;
 window.createRide = createRide;
 window.updateStatus = updateStatus;
 window.checkBackend = checkBackend;
-window.createRide = createRide;
 window.loadRides = loadRides;
-
