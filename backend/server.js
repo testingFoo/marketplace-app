@@ -3,6 +3,7 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const http = require("http");
 const { Server } = require("socket.io");
+const axios = require("axios");
 
 const app = express();
 const server = http.createServer(app);
@@ -22,29 +23,53 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.log("🔴 Mongo Error", err));
 
 // =====================
-// DRIVER STATE
+// STATE
 // =====================
 let onlineDrivers = {};
 let driverLocations = {};
 
 // =====================
-// DISTANCE FUNCTION (Haversine)
+// DISTANCE
 // =====================
 function getDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; // km
+  const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
 
   const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1 * Math.PI / 180) *
     Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) *
-    Math.sin(dLon / 2);
+    Math.sin(dLon / 2) ** 2;
 
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
-  return R * c;
+// =====================
+// ROUTE API (OSRM)
+// =====================
+async function getRoute(pickupLat, pickupLng, dropLat, dropLng) {
+  try {
+    const url =
+      `https://router.project-osrm.org/route/v1/driving/` +
+      `${pickupLng},${pickupLat};${dropLng},${dropLat}` +
+      `?overview=full&geometries=geojson`;
+
+    const res = await axios.get(url);
+
+    const route = res.data.routes[0];
+
+    if (!route) return null;
+
+    return {
+      coords: route.geometry.coordinates,
+      distance: route.distance,
+      duration: route.duration
+    };
+  } catch (err) {
+    console.log("❌ Route error:", err.message);
+    return null;
+  }
 }
 
 // =====================
@@ -63,7 +88,6 @@ io.on("connection", (socket) => {
 
   socket.on("driver:location", (data) => {
     const { driverId, lat, lng } = data;
-
     driverLocations[driverId] = { lat, lng };
 
     io.emit("driver:move", { driverId, lat, lng });
@@ -95,34 +119,30 @@ app.get("/api/health", (req, res) => {
 });
 
 // =====================
-// CREATE RIDE (NEAREST DRIVER LOGIC)
+// CREATE RIDE (STEP F UPGRADED)
 // =====================
 app.post("/api/ride", async (req, res) => {
   const { pickup, destination, userId } = req.body;
 
-  let bestDriver = null;
-  let bestDistance = Infinity;
-
-  // Fake pickup coords (you can later replace with real geocoding)
   const pickupLat = 52.2297;
   const pickupLng = 21.0122;
 
-  for (const driverId of Object.keys(onlineDrivers)) {
-    const loc = driverLocations[driverId];
+  const dropLat = 52.23 + Math.random() * 0.02;
+  const dropLng = 21.01 + Math.random() * 0.02;
 
-    if (!loc) continue;
-    if (onlineDrivers[driverId].busy) continue;
+  // nearest driver
+  let bestDriver = null;
+  let bestDistance = Infinity;
 
-    const dist = getDistance(
-      pickupLat,
-      pickupLng,
-      loc.lat,
-      loc.lng
-    );
+  for (const id of Object.keys(onlineDrivers)) {
+    const loc = driverLocations[id];
+    if (!loc || onlineDrivers[id].busy) continue;
+
+    const dist = getDistance(pickupLat, pickupLng, loc.lat, loc.lng);
 
     if (dist < bestDistance) {
       bestDistance = dist;
-      bestDriver = driverId;
+      bestDriver = id;
     }
   }
 
@@ -138,9 +158,6 @@ app.post("/api/ride", async (req, res) => {
       driverId: bestDriver,
       status: "ACCEPTED"
     });
-
-    io.emit("ride:new", ride);
-
   } else {
     ride = await Ride.create({
       pickup,
@@ -149,14 +166,19 @@ app.post("/api/ride", async (req, res) => {
       driverId: null,
       status: "NO_DRIVER_AVAILABLE"
     });
-
-    io.emit("ride:new", ride);
   }
 
-  res.json({
-    ride,
-    eta: bestDistance !== Infinity ? `${Math.round(bestDistance * 3)} min` : null
-  });
+  // route (even if no driver → still show map path)
+  const route = await getRoute(
+    pickupLat,
+    pickupLng,
+    dropLat,
+    dropLng
+  );
+
+  io.emit("ride:new", { ride, route });
+
+  res.json({ ride, route });
 });
 
 // =====================
@@ -199,5 +221,5 @@ app.patch("/api/ride/:id/status", async (req, res) => {
 // START
 // =====================
 server.listen(3000, () => {
-  console.log("🚀 Server running with Step E logic");
+  console.log("🚀 Step F server running (routes + dispatch)");
 });
