@@ -8,14 +8,26 @@ const statusBox = document.getElementById("status");
 // =====================
 let mode = "rider";
 
-// fake user identity (STEP 3 CORE)
+// =====================
+// USER ID (RIDER)
+// =====================
 const userId =
   localStorage.getItem("userId") ||
   Math.random().toString(36).substring(2, 10);
 
 localStorage.setItem("userId", userId);
 
+// =====================
+// DRIVER ID
+// =====================
+const driverId =
+  localStorage.getItem("driverId") ||
+  Math.random().toString(36).substring(2, 10);
+
+localStorage.setItem("driverId", driverId);
+
 logBox.innerText += "👤 User ID: " + userId + "\n";
+logBox.innerText += "🚗 Driver ID: " + driverId + "\n";
 
 // =====================
 // LOGGING
@@ -61,7 +73,7 @@ function checkBackend() {
 
       setStatus(`${backendStatus} | ${dbStatus}`);
 
-      log("✅ Health response:");
+      log("✅ Health:");
       log(JSON.stringify(data, null, 2));
     })
     .catch(err => {
@@ -71,16 +83,16 @@ function checkBackend() {
 }
 
 // =====================
-// CREATE RIDE (STEP 3)
+// CREATE RIDE (INPUT BASED)
 // =====================
 function createRide() {
   log("➡️ Creating ride...");
 
-  const pickup = prompt("Enter pickup location:");
-  const destination = prompt("Enter destination:");
+  const pickup = document.getElementById("pickup").value;
+  const destination = document.getElementById("destination").value;
 
   if (!pickup || !destination) {
-    log("⚠️ Missing pickup/destination");
+    log("⚠️ Missing input fields");
     return;
   }
 
@@ -106,7 +118,7 @@ function createRide() {
 }
 
 // =====================
-// UPDATE STATUS (Driver)
+// UPDATE STATUS (DRIVER)
 // =====================
 function updateStatus(id, status) {
   log(`➡️ Updating ${id} → ${status}`);
@@ -116,7 +128,10 @@ function updateStatus(id, status) {
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ status })
+    body: JSON.stringify({
+      status,
+      driverId
+    })
   })
     .then(res => res.json())
     .then(data => {
@@ -129,7 +144,7 @@ function updateStatus(id, status) {
 }
 
 // =====================
-// LOAD RIDES (STEP 3 LOGIC)
+// LOAD RIDES (STEP 4 LOGIC)
 // =====================
 function loadRides() {
   log("➡️ Loading rides...");
@@ -141,7 +156,7 @@ function loadRides() {
       container.innerHTML = "";
 
       if (!Array.isArray(data)) {
-        log("❌ Invalid server response");
+        log("❌ Invalid response");
         return;
       }
 
@@ -152,14 +167,14 @@ function loadRides() {
         filtered = data.filter(r => r.status === "REQUESTED");
       }
 
-      // 👤 RIDER VIEW (ONLY THEIR RIDES)
+      // 👤 RIDER VIEW
       if (mode === "rider") {
         filtered = data.filter(r => r.userId === userId);
       }
 
       if (filtered.length === 0) {
         container.innerHTML = "<p>No rides found</p>";
-        log("📭 Empty view for mode: " + mode);
+        log("📭 Empty view: " + mode);
         return;
       }
 
@@ -178,13 +193,14 @@ function loadRides() {
         }
 
         if (mode === "rider") {
-          buttons = `<small>👤 Your ride status</small>`;
+          buttons = `<small>👤 Tracking ride</small>`;
         }
 
         div.innerHTML = `
           <b>🚗 ${r.pickup} → ${r.destination}</b><br/>
           <b>Status:</b> ${r.status}<br/>
-          <small>User: ${r.userId}</small><br/><br/>
+          <small>User: ${r.userId}</small><br/>
+          <small>Driver: ${r.driverId || "none"}</small><br/><br/>
           ${buttons}
         `;
 
