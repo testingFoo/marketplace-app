@@ -16,14 +16,14 @@ function log(msg) {
 }
 
 // =====================
-// Set Status UI
+// Status UI
 // =====================
 function setStatus(msg) {
   statusBox.innerText = msg;
 }
 
 // =====================
-// Switch Mode (Rider / Driver)
+// Switch Mode
 // =====================
 function setMode(newMode) {
   mode = newMode;
@@ -99,7 +99,7 @@ function createRide() {
 }
 
 // =====================
-// Update Ride Status (Driver only action)
+// Update Ride Status (Driver only)
 // =====================
 function updateStatus(id, status) {
   log(`➡️ Updating ride ${id} → ${status}`);
@@ -124,7 +124,7 @@ function updateStatus(id, status) {
 }
 
 // =====================
-// Load Rides (Role-based UI)
+// Load Rides (STEP 2 LOGIC)
 // =====================
 function loadRides() {
   log("➡️ Loading rides...");
@@ -136,17 +136,44 @@ function loadRides() {
       container.innerHTML = "";
 
       if (!Array.isArray(data)) {
-        log("❌ Invalid response");
+        log("❌ Invalid response from server");
         return;
       }
 
-      data.forEach(r => {
+      let filtered = data;
+
+      // =====================
+      // 🚗 DRIVER MODE
+      // Only REQUESTED rides
+      // =====================
+      if (mode === "driver") {
+        filtered = data.filter(r => r.status === "REQUESTED");
+      }
+
+      // =====================
+      // 👤 RIDER MODE
+      // (still all rides for now)
+      // =====================
+      if (mode === "rider") {
+        filtered = data;
+      }
+
+      // No rides
+      if (filtered.length === 0) {
+        container.innerHTML = "<p>No rides available</p>";
+        log("📭 No rides in this view");
+        return;
+      }
+
+      filtered.forEach(r => {
         const div = document.createElement("div");
         div.className = "ride";
 
         let buttons = "";
 
-        // 🚗 DRIVER VIEW (can control status)
+        // =====================
+        // 🚗 DRIVER ACTIONS
+        // =====================
         if (mode === "driver") {
           buttons = `
             <button onclick="updateStatus('${r._id}', 'ACCEPTED')">Accept</button>
@@ -155,9 +182,11 @@ function loadRides() {
           `;
         }
 
-        // 👤 RIDER VIEW (read-only)
+        // =====================
+        // 👤 RIDER VIEW
+        // =====================
         if (mode === "rider") {
-          buttons = `<small>👤 Waiting for driver...</small>`;
+          buttons = `<small>👤 Tracking ride status...</small>`;
         }
 
         div.innerHTML = `
@@ -169,7 +198,7 @@ function loadRides() {
         container.appendChild(div);
       });
 
-      log(`📦 Rides loaded: ${data.length}`);
+      log(`📦 Loaded ${filtered.length} rides (mode: ${mode})`);
     })
     .catch(err => {
       log("❌ Load error: " + err);
