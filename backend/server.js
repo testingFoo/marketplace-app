@@ -39,8 +39,8 @@ async function getRoute(pickup, drop) {
 
     return {
       coords: route.geometry.coordinates,
-      distance: route.distance, // meters
-      duration: route.duration // seconds
+      distance: route.distance,
+      duration: route.duration
     };
   } catch {
     return null;
@@ -48,15 +48,14 @@ async function getRoute(pickup, drop) {
 }
 
 // ================= FARE =================
-function calculateFare(distanceMeters, durationSeconds) {
-  const base = 8; // PLN
+function calculateFare(distance, duration) {
+  const base = 8;
   const perKm = 2.5;
   const perMin = 0.5;
 
-  const km = distanceMeters / 1000;
-  const min = durationSeconds / 60;
-
-  return Math.round(base + km * perKm + min * perMin);
+  return Math.round(
+    base + (distance / 1000) * perKm + (duration / 60) * perMin
+  );
 }
 
 // ================= SOCKET =================
@@ -64,10 +63,13 @@ io.on("connection", (socket) => {
 
   socket.on("driver:online", (driverId) => {
     onlineDrivers[driverId] = { socketId: socket.id };
+    console.log("🟢 Driver online:", driverId);
   });
 
   socket.on("driver:offline", (driverId) => {
     delete onlineDrivers[driverId];
+    delete driverLocations[driverId];
+    console.log("🔴 Driver offline:", driverId);
   });
 
   socket.on("driver:location", (data) => {
@@ -96,15 +98,13 @@ const Ride = mongoose.model("Ride", new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 }));
 
-// ================= CREATE RIDE =================
+// ================= CREATE =================
 app.post("/api/ride", async (req, res) => {
   const { pickup, destination, pickupCoords, dropCoords, userId } = req.body;
 
   const route = await getRoute(pickupCoords, dropCoords);
 
-  let fare = 0;
-  let distance = 0;
-  let duration = 0;
+  let fare = 0, distance = 0, duration = 0;
 
   if (route) {
     fare = calculateFare(route.distance, route.duration);
@@ -129,7 +129,7 @@ app.post("/api/ride", async (req, res) => {
   res.json({ ride, route });
 });
 
-// ================= ACCEPT RIDE =================
+// ================= ACCEPT =================
 app.patch("/api/ride/:id/accept", async (req, res) => {
   const { driverId } = req.body;
 
@@ -151,12 +151,10 @@ app.patch("/api/ride/:id/accept", async (req, res) => {
 
 // ================= STATUS =================
 app.patch("/api/ride/:id/status", async (req, res) => {
-  const { status } = req.body;
-
   const ride = await Ride.findById(req.params.id);
   if (!ride) return res.status(404).json({ error: "Not found" });
 
-  ride.status = status;
+  ride.status = req.body.status;
 
   await ride.save();
 
@@ -187,5 +185,5 @@ app.get("/api/rides", async (req, res) => {
 });
 
 server.listen(3000, () => {
-  console.log("🚀 Step J server running");
+  console.log("🚀 Step K server running");
 });
