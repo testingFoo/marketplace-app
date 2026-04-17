@@ -9,7 +9,11 @@ let drop = null;
 
 let map;
 let driverMarker = null;
+let routeLine = null;
+
 let driverOnline = false;
+let currentRoute = [];
+let routeIndex = 0;
 
 // ================= INIT =================
 window.onload = () => {
@@ -17,7 +21,13 @@ window.onload = () => {
 
   socket = io(API);
 
-  socket.on("ride:new", loadRides);
+  socket.on("ride:new", (data) => {
+    if (data.route) {
+      drawRoute(data.route.coords);
+    }
+    loadRides();
+  });
+
   socket.on("ride:update", loadRides);
 
   socket.on("driver:move", updateDriverMarker);
@@ -27,7 +37,7 @@ window.onload = () => {
 
 // ================= MAP =================
 function initMap() {
-  map = L.map("map").setView([50.0647, 19.9450], 13); // Krakow
+  map = L.map("map").setView([50.0647, 19.9450], 13);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "OpenStreetMap"
@@ -48,6 +58,26 @@ function initMap() {
   });
 }
 
+// ================= DRAW ROUTE =================
+function drawRoute(coords) {
+  if (!coords || coords.length === 0) return;
+
+  // convert [lng, lat] → [lat, lng]
+  const latlngs = coords.map(c => [c[1], c[0]]);
+
+  if (routeLine) {
+    map.removeLayer(routeLine);
+  }
+
+  routeLine = L.polyline(latlngs).addTo(map);
+
+  map.fitBounds(routeLine.getBounds());
+
+  // store for driver movement
+  currentRoute = latlngs;
+  routeIndex = 0;
+}
+
 // ================= DRIVER TOGGLE =================
 function toggleDriver() {
   driverOnline = !driverOnline;
@@ -57,29 +87,29 @@ function toggleDriver() {
 
   if (driverOnline) {
     socket.emit("driver:online", driverId);
-    startDriverSimulation();
+    startRouteDriving();
   } else {
     socket.emit("driver:offline", driverId);
   }
 }
 
-// ================= DRIVER MOVEMENT =================
-function startDriverSimulation() {
-  let lat = 50.0647;
-  let lng = 19.9450;
-
+// ================= DRIVER ROUTE MOVEMENT =================
+function startRouteDriving() {
   setInterval(() => {
-    if (!driverOnline) return;
+    if (!driverOnline || currentRoute.length === 0) return;
 
-    lat += (Math.random() - 0.5) * 0.002;
-    lng += (Math.random() - 0.5) * 0.002;
+    if (routeIndex >= currentRoute.length) return;
+
+    const [lat, lng] = currentRoute[routeIndex];
 
     socket.emit("driver:location", {
       driverId,
       lat,
       lng
     });
-  }, 2000);
+
+    routeIndex++;
+  }, 1000); // smooth movement
 }
 
 // ================= DRIVER MARKER =================
@@ -89,7 +119,6 @@ function updateDriverMarker(data) {
   if (!driverMarker) {
     driverMarker = L.marker([lat, lng]).addTo(map);
   } else {
-    // smooth move
     driverMarker.setLatLng([lat, lng]);
   }
 }
