@@ -20,59 +20,40 @@ window.onload = () => {
   socket.on("ride:new", loadRides);
   socket.on("ride:update", loadRides);
 
-  socket.on("driver:move", (data) => {
-    if (!map) return;
-
-    const { lat, lng } = data;
-
-    if (!driverMarker) {
-      driverMarker = L.marker([lat, lng]).addTo(map);
-    } else {
-      driverMarker.setLatLng([lat, lng]);
-    }
-  });
+  socket.on("driver:move", updateDriverMarker);
 
   loadRides();
 };
 
 // ================= MAP =================
 function initMap() {
-  map = L.map("map").setView([50.0647, 19.9450], 13);
+  map = L.map("map").setView([50.0647, 19.9450], 13); // Krakow
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png")
-    .addTo(map);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "OpenStreetMap"
+  }).addTo(map);
 
   map.on("click", (e) => {
     const { lat, lng } = e.latlng;
 
     if (!pickup) {
       pickup = { lat, lng };
-      document.getElementById("pickup").value = `${lat},${lng}`;
+      document.getElementById("pickup").value =
+        `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     } else {
       drop = { lat, lng };
-      document.getElementById("destination").value = `${lat},${lng}`;
+      document.getElementById("destination").value =
+        `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     }
   });
-}
-
-// ================= DRIVER SIM =================
-function startDriverSimulation() {
-  if (!driverOnline) return;
-
-  let lat = 50.0647;
-  let lng = 19.9450;
-
-  setInterval(() => {
-    lat += (Math.random() - 0.5) * 0.002;
-    lng += (Math.random() - 0.5) * 0.002;
-
-    socket.emit("driver:location", { driverId, lat, lng });
-  }, 2000);
 }
 
 // ================= DRIVER TOGGLE =================
 function toggleDriver() {
   driverOnline = !driverOnline;
+
+  document.getElementById("driverStatus").innerText =
+    driverOnline ? "🟢 ONLINE" : "🔴 OFFLINE";
 
   if (driverOnline) {
     socket.emit("driver:online", driverId);
@@ -80,14 +61,45 @@ function toggleDriver() {
   } else {
     socket.emit("driver:offline", driverId);
   }
-
-  document.getElementById("driverStatus").innerText =
-    driverOnline ? "🟢 Online" : "🔴 Offline";
 }
 
-// ================= CREATE =================
+// ================= DRIVER MOVEMENT =================
+function startDriverSimulation() {
+  let lat = 50.0647;
+  let lng = 19.9450;
+
+  setInterval(() => {
+    if (!driverOnline) return;
+
+    lat += (Math.random() - 0.5) * 0.002;
+    lng += (Math.random() - 0.5) * 0.002;
+
+    socket.emit("driver:location", {
+      driverId,
+      lat,
+      lng
+    });
+  }, 2000);
+}
+
+// ================= DRIVER MARKER =================
+function updateDriverMarker(data) {
+  const { lat, lng } = data;
+
+  if (!driverMarker) {
+    driverMarker = L.marker([lat, lng]).addTo(map);
+  } else {
+    // smooth move
+    driverMarker.setLatLng([lat, lng]);
+  }
+}
+
+// ================= CREATE RIDE =================
 function createRide() {
-  if (!pickup || !drop) return alert("Select pickup/drop");
+  if (!pickup || !drop) {
+    alert("Select pickup/drop");
+    return;
+  }
 
   fetch(`${API}/api/ride`, {
     method: "POST",
@@ -102,7 +114,7 @@ function createRide() {
   });
 }
 
-// ================= ACCEPT =================
+// ================= DRIVER ACTIONS =================
 function acceptRide(id) {
   fetch(`${API}/api/ride/${id}/accept`, {
     method: "PATCH",
@@ -111,7 +123,6 @@ function acceptRide(id) {
   });
 }
 
-// ================= STATUS =================
 function updateStatus(id, status) {
   fetch(`${API}/api/ride/${id}/status`, {
     method: "PATCH",
@@ -120,7 +131,6 @@ function updateStatus(id, status) {
   });
 }
 
-// ================= CANCEL =================
 function cancelRide(id) {
   fetch(`${API}/api/ride/${id}/cancel`, {
     method: "PATCH"
@@ -149,7 +159,7 @@ function renderRider(rides) {
           ${r.pickup} → ${r.destination}<br/>
           Status: ${r.status}<br/>
           Fare: ${r.fare} PLN<br/>
-          Driver: ${r.driverId || "Searching..."}
+          Driver: ${r.driverId || "Searching..."}<br/>
 
           ${r.status !== "COMPLETED" && r.status !== "CANCELLED"
             ? `<button onclick="cancelRide('${r._id}')">Cancel</button>`
@@ -198,7 +208,7 @@ function renderDriver(rides) {
   });
 }
 
-// ================= GLOBAL =================
+// ================= EXPORT =================
 window.createRide = createRide;
 window.acceptRide = acceptRide;
 window.updateStatus = updateStatus;
