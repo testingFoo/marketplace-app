@@ -15,216 +15,177 @@ const io = new Server(server, {
 app.use(express.json());
 app.use(cors());
 
-// =====================
-// DB
-// =====================
+// ================= DB =================
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("🟢 DB connected"))
-  .catch(err => console.log("🔴 DB error", err));
+  .then(() => console.log("🟢 MongoDB Connected"))
+  .catch(err => console.log("🔴 Mongo Error", err));
 
-// =====================
-// STATE
-// =====================
-let drivers = {};
+// ================= STATE =================
+let onlineDrivers = {};
+let driverLocations = {};
 
-// =====================
-// DISTANCE (KM)
-// =====================
-function getDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-
-  const a =
-    Math.sin(dLat/2)**2 +
-    Math.cos(lat1*Math.PI/180) *
-    Math.cos(lat2*Math.PI/180) *
-    Math.sin(dLon/2)**2;
-
-  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-// =====================
-// ROUTE (OSRM)
-// =====================
-async function getRoute(a, b) {
+// ================= ROUTE =================
+async function getRoute(pickup, drop) {
   try {
     const url =
       `https://router.project-osrm.org/route/v1/driving/` +
-      `${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;
+      `${pickup.lng},${pickup.lat};${drop.lng},${drop.lat}` +
+      `?overview=full&geometries=geojson`;
 
     const res = await axios.get(url);
-    const route = res.data.routes?.[0];
+    const route = res.data.routes[0];
 
     if (!route) return null;
 
     return {
       coords: route.geometry.coordinates,
-      distance: route.distance,
-      duration: route.duration
+      distance: route.distance, // meters
+      duration: route.duration // seconds
     };
   } catch {
     return null;
   }
 }
 
-// =====================
-// MODEL
-// =====================
+// ================= FARE =================
+function calculateFare(distanceMeters, durationSeconds) {
+  const base = 8; // PLN
+  const perKm = 2.5;
+  const perMin = 0.5;
+
+  const km = distanceMeters / 1000;
+  const min = durationSeconds / 60;
+
+  return Math.round(base + km * perKm + min * perMin);
+}
+
+// ================= SOCKET =================
+io.on("connection", (socket) => {
+
+  socket.on("driver:online", (driverId) => {
+    onlineDrivers[driverId] = { socketId: socket.id };
+  });
+
+  socket.on("driver:offline", (driverId) => {
+    delete onlineDrivers[driverId];
+  });
+
+  socket.on("driver:location", (data) => {
+    driverLocations[data.driverId] = {
+      lat: data.lat,
+      lng: data.lng
+    };
+
+    io.emit("driver:move", data);
+  });
+
+});
+
+// ================= MODEL =================
 const Ride = mongoose.model("Ride", new mongoose.Schema({
   userId: String,
   driverId: String,
-  pickupText: String,
-  dropText: String,
-  pickup: Object,
-  drop: Object,
+  pickup: String,
+  destination: String,
+  pickupCoords: Object,
+  dropCoords: Object,
   status: String,
   fare: Number,
-  route: Object,
+  distance: Number,
+  duration: Number,
   createdAt: { type: Date, default: Date.now }
 }));
 
-// =====================
-// SOCKET
-// =====================
-io.on("connection", (socket) => {
-
-  socket.on("driver:online", (id) => {
-    drivers[id] = { socketId: socket.id, busy: false };
-  });
-
-  socket.on("driver:offline", (id) => {
-    delete drivers[id];
-  });
-
-  socket.on("driver:location", ({ driverId, lat, lng }) => {
-    if (drivers[driverId]) {
-      drivers[driverId].lat = lat;
-      drivers[driverId].lng = lng;
-    }
-    io.emit("driver:move", { driverId, lat, lng });
-  });
-});
-
-// =====================
-// FARE CALC (PLN)
-// =====================
-function calculateFare(distanceKm, type = "X") {
-  const base = 5;
-
-  const rates = {
-    X: 2.2,
-    COMFORT: 3.2,
-    XL: 4.5
-  };
-
-  return Math.round(base + distanceKm * (rates[type] || 2.2));
-}
-
-// =====================
-// CREATE RIDE
-// =====================
+// ================= CREATE RIDE =================
 app.post("/api/ride", async (req, res) => {
-  const { userId, pickup, drop, pickupCoords, dropCoords, type } = req.body;
-
-  let assigned = null;
-
-  // nearest driver
-  for (const id of Object.keys(drivers)) {
-    if (!drivers[id].busy) {
-      assigned = id;
-      drivers[id].busy = true;
-      break;
-    }
-  }
+  const { pickup, destination, pickupCoords, dropCoords, userId } = req.body;
 
   const route = await getRoute(pickupCoords, dropCoords);
 
-  const fare = route ? calculateFare(route.distance / 1000, type) : 20;
+  let fare = 0;
+  let distance = 0;
+  let duration = 0;
+
+  if (route) {
+    fare = calculateFare(route.distance, route.duration);
+    distance = route.distance;
+    duration = route.duration;
+  }
 
   const ride = await Ride.create({
+    pickup,
+    destination,
+    pickupCoords,
+    dropCoords,
     userId,
-    driverId: assigned,
-    pickupText: pickup,
-    dropText: drop,
-    pickup: pickupCoords,
-    drop: dropCoords,
-    status: assigned ? "ACCEPTED" : "NO_DRIVER_AVAILABLE",
+    status: "REQUESTED",
     fare,
-    route
+    distance,
+    duration
   });
 
-  io.emit("ride:new", ride);
+  io.emit("ride:new", { ride, route });
+
+  res.json({ ride, route });
+});
+
+// ================= ACCEPT RIDE =================
+app.patch("/api/ride/:id/accept", async (req, res) => {
+  const { driverId } = req.body;
+
+  const ride = await Ride.findById(req.params.id);
+
+  if (!ride || ride.status !== "REQUESTED") {
+    return res.status(400).json({ error: "Not available" });
+  }
+
+  ride.status = "ACCEPTED";
+  ride.driverId = driverId;
+
+  await ride.save();
+
+  io.emit("ride:update", ride);
 
   res.json(ride);
 });
 
-// =====================
-// GET RIDES
-// =====================
+// ================= STATUS =================
+app.patch("/api/ride/:id/status", async (req, res) => {
+  const { status } = req.body;
+
+  const ride = await Ride.findById(req.params.id);
+  if (!ride) return res.status(404).json({ error: "Not found" });
+
+  ride.status = status;
+
+  await ride.save();
+
+  io.emit("ride:update", ride);
+
+  res.json(ride);
+});
+
+// ================= CANCEL =================
+app.patch("/api/ride/:id/cancel", async (req, res) => {
+  const ride = await Ride.findById(req.params.id);
+
+  if (!ride) return res.status(404).json({ error: "Not found" });
+
+  ride.status = "CANCELLED";
+
+  await ride.save();
+
+  io.emit("ride:update", ride);
+
+  res.json(ride);
+});
+
+// ================= GET =================
 app.get("/api/rides", async (req, res) => {
   const rides = await Ride.find().sort({ createdAt: -1 });
   res.json(rides);
 });
 
-// =====================
-// STATUS FLOW
-// =====================
-const flow = {
-  ACCEPTED: "ARRIVING",
-  ARRIVING: "IN_PROGRESS",
-  IN_PROGRESS: "COMPLETED"
-};
-
-// =====================
-// UPDATE STATUS
-// =====================
-app.patch("/api/ride/:id/status", async (req, res) => {
-  const { status } = req.body;
-
-  const ride = await Ride.findById(req.params.id);
-  if (!ride) return res.status(404).json({ error: "not found" });
-
-  if (!flow[ride.status] || flow[ride.status] !== status) {
-    return res.status(400).json({ error: "invalid flow" });
-  }
-
-  ride.status = status;
-
-  if (status === "COMPLETED") {
-    if (drivers[ride.driverId]) drivers[ride.driverId].busy = false;
-  }
-
-  await ride.save();
-
-  io.emit("ride:update", ride);
-
-  res.json(ride);
-});
-
-// =====================
-// CANCEL RIDE (NEW)
-// =====================
-app.patch("/api/ride/:id/cancel", async (req, res) => {
-  const ride = await Ride.findById(req.params.id);
-  if (!ride) return res.status(404).json({ error: "not found" });
-
-  ride.status = "CANCELLED";
-
-  if (ride.driverId && drivers[ride.driverId]) {
-    drivers[ride.driverId].busy = false;
-  }
-
-  await ride.save();
-
-  io.emit("ride:update", ride);
-
-  res.json(ride);
-});
-
-// =====================
-// START
-// =====================
 server.listen(3000, () => {
-  console.log("🚀 Step I Uber Engine Running");
+  console.log("🚀 Step J server running");
 });
