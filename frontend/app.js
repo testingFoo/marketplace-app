@@ -6,65 +6,46 @@ let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
 
 let pickup = null;
 let drop = null;
-let driverOnline = false;
-let driverInterval = null;
-
 let map;
-let routeLine = null;
+let routeLine;
 
 // ================= INIT =================
 window.onload = () => {
   socket = io(API);
 
-  socket.on("ride:new", (data) => {
-    if (data.route && data.route.geometry) {
-      drawRoute(data.route.geometry.coordinates);
-    }
-    loadRides();
-  });
+  initMap();
 
   socket.on("ride:update", loadRides);
 
-  initMap();
+  socket.on("ride:request", (ride) => {
+    showDriverRequest(ride);
+  });
+
   loadRides();
 };
 
 // ================= MAP =================
 function initMap() {
-  map = L.map("map").setView([50.061, 19.938], 13);
+  map = L.map("map").setView([50.0647, 19.945], 13);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png")
     .addTo(map);
 
   map.on("click", (e) => {
-    const { lat, lng } = e.latlng;
-
     if (!pickup) {
-      pickup = { lat, lng };
+      pickup = e.latlng;
       document.getElementById("pickup").value =
-        `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        `${pickup.lat}, ${pickup.lng}`;
     } else {
-      drop = { lat, lng };
+      drop = e.latlng;
       document.getElementById("destination").value =
-        `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        `${drop.lat}, ${drop.lng}`;
     }
   });
 }
 
-// ================= ROUTE =================
-function drawRoute(coords) {
-  if (!map || !coords) return;
-
-  if (routeLine) map.removeLayer(routeLine);
-
-  const latlngs = coords.map(c => [c[1], c[0]]);
-  routeLine = L.polyline(latlngs).addTo(map);
-}
-
 // ================= CREATE =================
 function createRide() {
-  if (!pickup || !drop) return alert("Select pickup & drop");
-
   fetch(`${API}/api/ride`, {
     method: "POST",
     headers: {"Content-Type":"application/json"},
@@ -78,29 +59,18 @@ function createRide() {
   });
 }
 
-// ================= DRIVER =================
-function toggleDriver() {
-  driverOnline = !driverOnline;
+// ================= DRIVER REQUEST =================
+function showDriverRequest(r) {
+  const box = document.getElementById("driverRides");
 
-  if (!socket) return;
-
-  if (driverOnline) {
-    socket.emit("driver:online", driverId);
-
-    let lat = 50.061;
-    let lng = 19.938;
-
-    driverInterval = setInterval(() => {
-      lat += (Math.random() - 0.5) * 0.001;
-      lng += (Math.random() - 0.5) * 0.001;
-
-      socket.emit("driver:location", { driverId, lat, lng });
-    }, 2000);
-
-  } else {
-    socket.emit("driver:offline", driverId);
-    clearInterval(driverInterval);
-  }
+  box.innerHTML = `
+    <div class="ride">
+      🚨 NEW REQUEST<br/>
+      ${r.pickup} → ${r.destination}<br/>
+      Fare: ${r.fare} PLN<br/>
+      <button onclick="acceptRide('${r._id}')">Accept</button>
+    </div>
+  `;
 }
 
 // ================= ACCEPT =================
@@ -112,29 +82,13 @@ function acceptRide(id) {
   });
 }
 
-// ================= STATUS =================
-function updateStatus(id, status) {
-  fetch(`${API}/api/ride/${id}/status`, {
-    method: "PATCH",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ status })
-  });
-}
-
-// ================= CANCEL =================
-function cancelRide(id) {
-  fetch(`${API}/api/ride/${id}/cancel`, {
-    method: "PATCH"
-  });
-}
-
 // ================= LOAD =================
 function loadRides() {
   fetch(`${API}/api/rides`)
     .then(r => r.json())
-    .then(data => {
-      renderRider(data);
-      renderDriver(data);
+    .then(rides => {
+      renderRider(rides);
+      renderDriver(rides);
     });
 }
 
@@ -147,63 +101,72 @@ function renderRider(rides) {
     .forEach(r => {
       box.innerHTML += `
         <div class="ride">
-          <b>${r.pickup} → ${r.destination}</b><br/>
+          ${r.pickup} → ${r.destination}<br/>
           Status: ${r.status}<br/>
-          💰 ${r.fare} PLN<br/>
-          ⏱ ${Math.round(r.duration/60)} min<br/>
-
-          ${r.status !== "COMPLETED" && r.status !== "CANCELLED"
-            ? `<button onclick="cancelRide('${r._id}')">Cancel</button>`
-            : ""}
+          Fare: ${r.fare} PLN
         </div>
       `;
+
+      if (r.route) drawRoute(r.route.coords);
     });
 }
 
 // ================= DRIVER =================
 function renderDriver(rides) {
   const box = document.getElementById("driverRides");
-  box.innerHTML = "";
 
   rides.forEach(r => {
-
-    if (r.status === "REQUESTED") {
-      box.innerHTML += `
-        <div class="ride">
-          <b>${r.pickup} → ${r.destination}</b><br/>
-          💰 ${r.fare} PLN<br/>
-          <button onclick="acceptRide('${r._id}')">Accept</button>
-        </div>
-      `;
-    }
-
     if (r.driverId === driverId) {
-      box.innerHTML += `
+      box.innerHTML = `
         <div class="ride">
-          <b>${r.pickup} → ${r.destination}</b><br/>
+          ${r.pickup} → ${r.destination}<br/>
           Status: ${r.status}<br/>
 
           ${r.status === "ACCEPTED"
-            ? `<button onclick="updateStatus('${r._id}', 'ARRIVING')">Arriving</button>`
-            : ""}
-
-          ${r.status === "ARRIVING"
-            ? `<button onclick="updateStatus('${r._id}', 'IN_PROGRESS')">Start</button>`
+            ? `<button onclick="updateStatus('${r._id}','IN_PROGRESS')">Start</button>`
             : ""}
 
           ${r.status === "IN_PROGRESS"
-            ? `<button onclick="updateStatus('${r._id}', 'COMPLETED')">Complete</button>`
+            ? `<button onclick="updateStatus('${r._id}','COMPLETED')">Complete</button>`
             : ""}
         </div>
       `;
     }
-
   });
 }
 
-// ================= GLOBAL =================
+// ================= STATUS =================
+function updateStatus(id, status) {
+  fetch(`${API}/api/ride/${id}/status`, {
+    method: "PATCH",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ status })
+  });
+}
+
+// ================= ROUTE =================
+function drawRoute(coords) {
+  if (routeLine) map.removeLayer(routeLine);
+
+  routeLine = L.polyline(
+    coords.map(c => [c[1], c[0]])
+  ).addTo(map);
+}
+
+// ================= DRIVER ONLINE =================
+function toggleDriver() {
+  socket.emit("driver:online", driverId);
+
+  setInterval(() => {
+    socket.emit("driver:location", {
+      driverId,
+      lat: 50.06 + Math.random() * 0.01,
+      lng: 19.94 + Math.random() * 0.01
+    });
+  }, 2000);
+}
+
 window.createRide = createRide;
 window.acceptRide = acceptRide;
 window.updateStatus = updateStatus;
-window.cancelRide = cancelRide;
 window.toggleDriver = toggleDriver;
