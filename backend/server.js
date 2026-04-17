@@ -17,8 +17,8 @@ app.use(cors());
 
 // ================= DB =================
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("🟢 MongoDB Connected"))
-  .catch(err => console.log("🔴 Mongo Error", err));
+  .then(()=>console.log("🟢 MongoDB Connected"))
+  .catch(err=>console.log(err));
 
 // ================= STATE =================
 let onlineDrivers = {};
@@ -33,42 +33,46 @@ async function getRoute(pickup, drop) {
       `?overview=full&geometries=geojson`;
 
     const res = await axios.get(url);
-    return res.data.routes[0];
+    const route = res.data.routes[0];
+
+    if (!route) return null;
+
+    return {
+      coords: route.geometry.coordinates,
+      distance: route.distance,
+      duration: route.duration
+    };
   } catch {
     return null;
   }
 }
 
 // ================= FARE =================
-function calcFare(distance, duration) {
+function calculateFare(distance, duration) {
   const base = 8;
-  return Math.round(base + (distance/1000)*2.5 + (duration/60)*0.5);
+  const perKm = 2.5;
+  const perMin = 0.5;
+
+  return Math.round(
+    base +
+    (distance/1000)*perKm +
+    (duration/60)*perMin
+  );
 }
 
 // ================= SOCKET =================
 io.on("connection", (socket) => {
 
   socket.on("driver:online", (driverId) => {
-    onlineDrivers[driverId] = {
-      socketId: socket.id,
-      busy: false,
-      lastSeen: Date.now()
-    };
-    console.log("🟢 Driver online:", driverId);
+    onlineDrivers[driverId] = { socketId: socket.id };
   });
 
   socket.on("driver:offline", (driverId) => {
     delete onlineDrivers[driverId];
-    delete driverLocations[driverId];
-    console.log("🔴 Driver offline:", driverId);
   });
 
   socket.on("driver:location", (data) => {
-    driverLocations[data.driverId] = {
-      lat: data.lat,
-      lng: data.lng
-    };
-
+    driverLocations[data.driverId] = data;
     io.emit("driver:move", data);
   });
 
@@ -86,7 +90,7 @@ const Ride = mongoose.model("Ride", new mongoose.Schema({
   fare: Number,
   distance: Number,
   duration: Number,
-  createdAt: { type: Date, default: Date.now }
+  route: Array
 }));
 
 // ================= CREATE =================
@@ -95,12 +99,14 @@ app.post("/api/ride", async (req, res) => {
 
   const route = await getRoute(pickupCoords, dropCoords);
 
-  let fare = 0, distance = 0, duration = 0;
+  let fare = 0;
+  let distance = 0;
+  let duration = 0;
 
   if (route) {
+    fare = calculateFare(route.distance, route.duration);
     distance = route.distance;
     duration = route.duration;
-    fare = calcFare(distance, duration);
   }
 
   const ride = await Ride.create({
@@ -112,12 +118,13 @@ app.post("/api/ride", async (req, res) => {
     status: "REQUESTED",
     fare,
     distance,
-    duration
+    duration,
+    route: route?.coords || []
   });
 
-  io.emit("ride:new", { ride, route });
+  io.emit("ride:new", ride);
 
-  res.json({ ride, route });
+  res.json(ride);
 });
 
 // ================= ACCEPT =================
@@ -126,17 +133,13 @@ app.patch("/api/ride/:id/accept", async (req, res) => {
 
   const ride = await Ride.findById(req.params.id);
 
-  if (!ride || ride.status !== "REQUESTED") {
+  if (!ride || ride.status !== "REQUESTED")
     return res.status(400).json({ error: "Not available" });
-  }
 
   ride.status = "ACCEPTED";
   ride.driverId = driverId;
 
-  onlineDrivers[driverId].busy = true;
-
   await ride.save();
-
   io.emit("ride:update", ride);
 
   res.json(ride);
@@ -147,13 +150,9 @@ app.patch("/api/ride/:id/status", async (req, res) => {
   const { status } = req.body;
 
   const ride = await Ride.findById(req.params.id);
+  if (!ride) return res.status(404).json({});
 
   ride.status = status;
-
-  if (status === "COMPLETED" && ride.driverId) {
-    onlineDrivers[ride.driverId].busy = false;
-  }
-
   await ride.save();
 
   io.emit("ride:update", ride);
@@ -162,10 +161,9 @@ app.patch("/api/ride/:id/status", async (req, res) => {
 });
 
 // ================= GET =================
-app.get("/api/rides", async (req, res) => {
-  res.json(await Ride.find().sort({ createdAt: -1 }));
+app.get("/api/rides", async (req,res)=>{
+  const rides = await Ride.find().sort({_id:-1});
+  res.json(rides);
 });
 
-server.listen(3000, () => {
-  console.log("🚀 Stable dispatch server running");
-});
+server.listen(3000, ()=>console.log("🚀 STEP O READY"));
