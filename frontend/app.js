@@ -17,15 +17,13 @@ window.onload = () => {
   socket = io(API);
 
   socket.on("ride:new", (data) => {
-    if (data.route) drawRoute(data.route.geometry.coordinates);
+    if (data.route && data.route.geometry) {
+      drawRoute(data.route.geometry.coordinates);
+    }
     loadRides();
   });
 
   socket.on("ride:update", loadRides);
-
-  socket.on("driver:move", (data) => {
-    // could add marker here later
-  });
 
   initMap();
   loadRides();
@@ -43,16 +41,20 @@ function initMap() {
 
     if (!pickup) {
       pickup = { lat, lng };
-      document.getElementById("pickup").value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      document.getElementById("pickup").value =
+        `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     } else {
       drop = { lat, lng };
-      document.getElementById("destination").value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      document.getElementById("destination").value =
+        `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     }
   });
 }
 
 // ================= ROUTE =================
 function drawRoute(coords) {
+  if (!map || !coords) return;
+
   if (routeLine) map.removeLayer(routeLine);
 
   const latlngs = coords.map(c => [c[1], c[0]]);
@@ -148,7 +150,7 @@ function renderRider(rides) {
           <b>${r.pickup} → ${r.destination}</b><br/>
           Status: ${r.status}<br/>
           💰 ${r.fare} PLN<br/>
-          ⏱ ETA: ${Math.round(r.duration/60)} min<br/>
+          ⏱ ${Math.round(r.duration/60)} min<br/>
 
           ${r.status !== "COMPLETED" && r.status !== "CANCELLED"
             ? `<button onclick="cancelRide('${r._id}')">Cancel</button>`
