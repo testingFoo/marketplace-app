@@ -4,36 +4,71 @@ let socket;
 let userId = localStorage.getItem("userId") || ("user_" + Date.now());
 let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
 
-let pickup = null;
-let drop = null;
+let driverOnline = false;
 
+// ================= INIT =================
 window.onload = () => {
   socket = io(API);
+
+  socket.on("connect", () => console.log("🟢 socket"));
 
   socket.on("ride:new", loadRides);
   socket.on("ride:update", loadRides);
 
+  initMap();
   loadRides();
 };
 
+// ================= MAP =================
+let map;
+
+function initMap() {
+  setTimeout(() => {
+    map = L.map("map").setView([52.2297, 21.0122], 12);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "OSM"
+    }).addTo(map);
+
+    map.invalidateSize();
+  }, 300);
+}
+
 // ================= CREATE =================
 function createRide() {
-  if (!pickup || !drop) return alert("Select pickup/drop");
+  const pickup = document.getElementById("pickup").value;
+  const destination = document.getElementById("destination").value;
+
+  if (!pickup || !destination) {
+    alert("Enter pickup & destination");
+    return;
+  }
 
   fetch(`${API}/api/ride`, {
     method: "POST",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({
-      pickup: document.getElementById("pickup").value,
-      destination: document.getElementById("destination").value,
-      pickupCoords: pickup,
-      dropCoords: drop,
+      pickup,
+      destination,
       userId
     })
   });
 }
 
-// ================= DRIVER ACCEPT =================
+// ================= DRIVER =================
+function toggleDriver() {
+  driverOnline = !driverOnline;
+
+  if (driverOnline) {
+    socket.emit("driver:online", driverId);
+    document.getElementById("driverStatus").innerText = "Online";
+  } else {
+    socket.emit("driver:offline", driverId);
+    document.getElementById("driverStatus").innerText = "Offline";
+  }
+}
+
+// ================= ACCEPT =================
 function acceptRide(id) {
   fetch(`${API}/api/ride/${id}/accept`, {
     method: "PATCH",
@@ -73,13 +108,14 @@ function renderRider(rides) {
   const box = document.getElementById("riderRides");
   box.innerHTML = "";
 
-  rides.filter(r => r.userId === userId)
+  rides
+    .filter(r => r.userId === userId)
     .forEach(r => {
       box.innerHTML += `
         <div class="ride">
           ${r.pickup} → ${r.destination}<br/>
           Status: ${r.status}<br/>
-          Fare: ${r.fare} PLN<br/>
+          Fare: ${r.fare || 0} PLN<br/>
           Driver: ${r.driverId || "Searching..."}<br/>
 
           ${r.status !== "COMPLETED" && r.status !== "CANCELLED"
@@ -96,11 +132,12 @@ function renderDriver(rides) {
   box.innerHTML = "";
 
   rides.forEach(r => {
+
     if (r.status === "REQUESTED") {
       box.innerHTML += `
         <div class="ride">
           ${r.pickup} → ${r.destination}<br/>
-          Fare: ${r.fare} PLN<br/>
+          Fare: ${r.fare || 0} PLN<br/>
           <button onclick="acceptRide('${r._id}')">Accept</button>
         </div>
       `;
@@ -126,15 +163,13 @@ function renderDriver(rides) {
         </div>
       `;
     }
+
   });
 }
 
-// ================= MAP PICK =================
-document.addEventListener("click", (e) => {
-  if (!window.map) return;
-});
-
+// ================= GLOBAL =================
 window.createRide = createRide;
+window.toggleDriver = toggleDriver;
 window.acceptRide = acceptRide;
 window.updateStatus = updateStatus;
 window.cancelRide = cancelRide;
