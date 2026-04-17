@@ -34,7 +34,8 @@ async function getRoute(pickup, drop) {
 
     const res = await axios.get(url);
     return res.data.routes[0];
-  } catch {
+  } catch (err) {
+    console.log("❌ Route error:", err.message);
     return null;
   }
 }
@@ -45,7 +46,7 @@ function calculateFare(distance, duration) {
   const perKm = 2.5;
   const perMin = 0.5;
 
-  return Math.round(base + (distance/1000)*perKm + (duration/60)*perMin);
+  return Math.round(base + (distance / 1000) * perKm + (duration / 60) * perMin);
 }
 
 // ================= SOCKET =================
@@ -94,15 +95,17 @@ app.post("/api/ride", async (req, res) => {
 
   const route = await getRoute(pickupCoords, dropCoords);
 
-  let distance = 0, duration = 0, fare = 0;
+  // ✅ fallback if OSRM fails
+  let distance = 2000;
+  let duration = 600;
 
   if (route) {
     distance = route.distance;
     duration = route.duration;
-    fare = calculateFare(distance, duration);
   }
 
-  // ❗ IMPORTANT: no driver assigned yet
+  const fare = calculateFare(distance, duration);
+
   const ride = await Ride.create({
     pickup,
     destination,
@@ -177,5 +180,5 @@ app.get("/api/rides", async (req, res) => {
 });
 
 server.listen(3000, () => {
-  console.log("🚀 FIXED server running");
+  console.log("🚀 Server running (fixed route + fare)");
 });
