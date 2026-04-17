@@ -1,140 +1,175 @@
 const API = "https://marketplace-app-m8ac.onrender.com";
 
-let socket;
-let userId = localStorage.getItem("userId") || ("user_" + Date.now());
-let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
+let mode = "rider";
+let driverOnline = false;
 
 let pickup = null;
 let drop = null;
 
-window.onload = () => {
+let userId = localStorage.getItem("userId") || ("user_" + Date.now());
+localStorage.setItem("userId", userId);
+
+let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
+localStorage.setItem("driverId", driverId);
+
+// =====================
+// DEBUG
+// =====================
+function log(msg) {
+  const el = document.getElementById("log");
+  if (el) el.innerText += msg + "\n";
+}
+
+function setStatus(msg) {
+  document.getElementById("status").innerText = msg;
+}
+
+// =====================
+// MAP
+// =====================
+let map;
+
+function initMap() {
+  map = L.map("map").setView([52.2297, 21.0122], 12);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+
+  map.on("click", (e) => {
+    const { lat, lng } = e.latlng;
+
+    if (!pickup) {
+      pickup = { lat, lng };
+      document.getElementById("pickup").value = `${lat},${lng}`;
+    } else {
+      drop = { lat, lng };
+      document.getElementById("destination").value = `${lat},${lng}`;
+    }
+  });
+}
+
+// =====================
+// SOCKET
+// =====================
+let socket;
+
+function initSocket() {
   socket = io(API);
 
-  socket.on("ride:new", loadRides);
-  socket.on("ride:update", loadRides);
+  socket.on("ride:new", () => loadRides());
+  socket.on("ride:update", () => loadRides());
+}
 
-  loadRides();
-};
-
-// ================= CREATE =================
+// =====================
+// CREATE RIDE
+// =====================
 function createRide() {
-  if (!pickup || !drop) return alert("Select pickup/drop");
-
   fetch(`${API}/api/ride`, {
     method: "POST",
-    headers: {"Content-Type":"application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      userId,
       pickup: document.getElementById("pickup").value,
-      destination: document.getElementById("destination").value,
+      drop: document.getElementById("destination").value,
       pickupCoords: pickup,
-      dropCoords: drop,
-      userId
+      dropCoords: drop
     })
-  });
+  }).then(loadRides);
 }
 
-// ================= DRIVER ACCEPT =================
-function acceptRide(id) {
-  fetch(`${API}/api/ride/${id}/accept`, {
-    method: "PATCH",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ driverId })
-  });
+// =====================
+// DRIVER MODE
+// =====================
+function toggleDriver() {
+  driverOnline = !driverOnline;
+
+  socket.emit(driverOnline ? "driver:online" : "driver:offline", driverId);
+
+  document.getElementById("driverToggle").innerText =
+    driverOnline ? "Go OFFLINE" : "Go ONLINE";
 }
 
-// ================= STATUS =================
+// =====================
+// MODE
+// =====================
+function setMode(m) {
+  mode = m;
+  document.getElementById("modeLabel").innerText = "Current: " + m.toUpperCase();
+  loadRides();
+}
+
+// =====================
+// STATUS UPDATE
+// =====================
 function updateStatus(id, status) {
   fetch(`${API}/api/ride/${id}/status`, {
     method: "PATCH",
-    headers: {"Content-Type":"application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status })
-  });
+  }).then(loadRides);
 }
 
-// ================= CANCEL =================
-function cancelRide(id) {
-  fetch(`${API}/api/ride/${id}/cancel`, {
-    method: "PATCH"
-  });
-}
-
-// ================= LOAD =================
+// =====================
+// LOAD RIDES (CRITICAL FIX)
+// =====================
 function loadRides() {
   fetch(`${API}/api/rides`)
     .then(r => r.json())
     .then(data => {
-      renderRider(data);
-      renderDriver(data);
-    });
-}
+      const box = document.getElementById("rides");
+      box.innerHTML = "";
 
-// ================= RIDER =================
-function renderRider(rides) {
-  const box = document.getElementById("riderRides");
-  box.innerHTML = "";
+      let filtered = data;
 
-  rides.filter(r => r.userId === userId)
-    .forEach(r => {
-      box.innerHTML += `
-        <div class="ride">
-          ${r.pickup} → ${r.destination}<br/>
-          Status: ${r.status}<br/>
-          Fare: ${r.fare} PLN<br/>
-          Driver: ${r.driverId || "Searching..."}<br/>
+      if (mode === "driver") {
+        filtered = data.filter(r =>
+          r.status === "ACCEPTED" ||
+          r.status === "ARRIVING" ||
+          r.status === "IN_PROGRESS"
+        );
+      }
 
-          ${r.status !== "COMPLETED" && r.status !== "CANCELLED"
-            ? `<button onclick="cancelRide('${r._id}')">Cancel</button>`
-            : ""}
-        </div>
-      `;
-    });
-}
+      if (mode === "rider") {
+        filtered = data.filter(r => r.userId === userId);
+      }
 
-// ================= DRIVER =================
-function renderDriver(rides) {
-  const box = document.getElementById("driverRides");
-  box.innerHTML = "";
+      filtered.forEach(r => {
+        const div = document.createElement("div");
+        div.className = "ride";
 
-  rides.forEach(r => {
-    if (r.status === "REQUESTED") {
-      box.innerHTML += `
-        <div class="ride">
-          ${r.pickup} → ${r.destination}<br/>
-          Fare: ${r.fare} PLN<br/>
-          <button onclick="acceptRide('${r._id}')">Accept</button>
-        </div>
-      `;
-    }
-
-    if (r.driverId === driverId) {
-      box.innerHTML += `
-        <div class="ride">
-          ${r.pickup} → ${r.destination}<br/>
+        div.innerHTML = `
+          <b>${r.pickupText || r.pickup} → ${r.dropText || r.drop}</b><br/>
           Status: ${r.status}<br/>
 
           ${r.status === "ACCEPTED"
-            ? `<button onclick="updateStatus('${r._id}', 'ARRIVING')">Arriving</button>`
+            ? `<button onclick="updateStatus('${r._id}','ARRIVING')">Start Arriving</button>`
             : ""}
 
           ${r.status === "ARRIVING"
-            ? `<button onclick="updateStatus('${r._id}', 'IN_PROGRESS')">Start</button>`
+            ? `<button onclick="updateStatus('${r._id}','IN_PROGRESS')">Start Ride</button>`
             : ""}
 
           ${r.status === "IN_PROGRESS"
-            ? `<button onclick="updateStatus('${r._id}', 'COMPLETED')">Complete</button>`
+            ? `<button onclick="updateStatus('${r._id}','COMPLETED')">Complete</button>`
             : ""}
-        </div>
-      `;
-    }
-  });
+        `;
+
+        box.appendChild(div);
+      });
+    });
 }
 
-// ================= MAP PICK =================
-document.addEventListener("click", (e) => {
-  if (!window.map) return;
-});
+// =====================
+// INIT
+// =====================
+window.onload = () => {
+  initMap();
+  initSocket();
+  loadRides();
+};
 
+// GLOBALS
+window.setMode = setMode;
+window.toggleDriver = toggleDriver;
 window.createRide = createRide;
-window.acceptRide = acceptRide;
 window.updateStatus = updateStatus;
-window.cancelRide = cancelRide;
+window.loadRides = loadRides;
