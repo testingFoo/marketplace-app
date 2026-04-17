@@ -125,10 +125,9 @@ function updateDriverMarker(data) {
 
 // ================= CREATE RIDE =================
 function createRide() {
-  if (!pickup || !drop) {
-    alert("Select pickup/drop");
-    return;
-  }
+  if (!pickup || !drop) return alert("Select pickup/drop");
+
+  const vehicleType = document.getElementById("vehicleType").value;
 
   fetch(`${API}/api/ride`, {
     method: "POST",
@@ -138,7 +137,8 @@ function createRide() {
       destination: document.getElementById("destination").value,
       pickupCoords: pickup,
       dropCoords: drop,
-      userId
+      userId,
+      vehicleType
     })
   });
 }
@@ -181,14 +181,22 @@ function renderRider(rides) {
   const box = document.getElementById("riderRides");
   box.innerHTML = "";
 
-  rides.filter(r => r.userId === userId)
+  rides
+    .filter(r => r.userId === userId)
     .forEach(r => {
       box.innerHTML += `
         <div class="ride">
-          ${r.pickup} → ${r.destination}<br/>
+          <b>${r.pickup} → ${r.destination}</b><br/>
           Status: ${r.status}<br/>
-          Fare: ${r.fare} PLN<br/>
-          Driver: ${r.driverId || "Searching..."}<br/>
+
+          💰 Fare: ${r.fare || "-"} PLN<br/>
+          ⏱ ETA: ${r.duration ? Math.round(r.duration / 60) : "-"} min<br/>
+
+          🚗 Vehicle: ${r.vehicleType || "-"}<br/>
+
+          👤 Driver: ${r.driverInfo?.name || "Searching..."}<br/>
+          ⭐ Rating: ${r.driverInfo?.rating || "-"}<br/>
+          🚘 Car: ${r.driverInfo?.car || "-"}<br/>
 
           ${r.status !== "COMPLETED" && r.status !== "CANCELLED"
             ? `<button onclick="cancelRide('${r._id}')">Cancel</button>`
