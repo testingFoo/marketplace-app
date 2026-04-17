@@ -20,12 +20,9 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("🟢 MongoDB Connected"))
   .catch(err => console.log("🔴 Mongo Error", err));
 
-// ================= DRIVER PROFILES =================
-const drivers = {
-  d1: { name: "Adam", rating: 4.8, car: "Toyota Prius", type: "UberX" },
-  d2: { name: "Kasia", rating: 4.9, car: "BMW 5", type: "Comfort" },
-  d3: { name: "Marek", rating: 4.7, car: "Van 7-Seater", type: "XL" }
-};
+// ================= DRIVER STATE =================
+let onlineDrivers = {};
+let driverLocations = {};
 
 // ================= ROUTE =================
 async function getRoute(pickup, drop) {
@@ -43,27 +40,43 @@ async function getRoute(pickup, drop) {
 }
 
 // ================= FARE =================
-function calculateFare(distance, duration, type) {
-  let base = 8;
-  let perKm = 2.5;
-  let perMin = 0.5;
+function calculateFare(distance, duration) {
+  const base = 8;
+  const perKm = 2.5;
+  const perMin = 0.5;
 
-  if (type === "Comfort") base *= 1.5;
-  if (type === "XL") base *= 2;
-
-  // 🔥 Surge (simple)
-  const hour = new Date().getHours();
-  let surge = (hour >= 17 && hour <= 20) ? 1.5 : 1;
-
-  return Math.round((base + (distance/1000)*perKm + (duration/60)*perMin) * surge);
+  return Math.round(base + (distance/1000)*perKm + (duration/60)*perMin);
 }
+
+// ================= SOCKET =================
+io.on("connection", (socket) => {
+
+  socket.on("driver:online", (driverId) => {
+    onlineDrivers[driverId] = { socketId: socket.id };
+    console.log("🟢 Driver online:", driverId);
+  });
+
+  socket.on("driver:offline", (driverId) => {
+    delete onlineDrivers[driverId];
+    delete driverLocations[driverId];
+    console.log("🔴 Driver offline:", driverId);
+  });
+
+  socket.on("driver:location", (data) => {
+    driverLocations[data.driverId] = {
+      lat: data.lat,
+      lng: data.lng
+    };
+
+    io.emit("driver:move", data);
+  });
+
+});
 
 // ================= MODEL =================
 const Ride = mongoose.model("Ride", new mongoose.Schema({
   userId: String,
   driverId: String,
-  driverInfo: Object,
-  vehicleType: String,
   pickup: String,
   destination: String,
   pickupCoords: Object,
@@ -75,9 +88,9 @@ const Ride = mongoose.model("Ride", new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 }));
 
-// ================= CREATE =================
+// ================= CREATE RIDE =================
 app.post("/api/ride", async (req, res) => {
-  const { pickup, destination, pickupCoords, dropCoords, userId, vehicleType } = req.body;
+  const { pickup, destination, pickupCoords, dropCoords, userId } = req.body;
 
   const route = await getRoute(pickupCoords, dropCoords);
 
@@ -86,22 +99,16 @@ app.post("/api/ride", async (req, res) => {
   if (route) {
     distance = route.distance;
     duration = route.duration;
-    fare = calculateFare(distance, duration, vehicleType);
+    fare = calculateFare(distance, duration);
   }
 
-  // assign random driver (simulate matching)
-  const driverKeys = Object.keys(drivers);
-  const driverId = driverKeys[Math.floor(Math.random() * driverKeys.length)];
-
+  // ❗ IMPORTANT: no driver assigned yet
   const ride = await Ride.create({
     pickup,
     destination,
     pickupCoords,
     dropCoords,
     userId,
-    vehicleType,
-    driverId,
-    driverInfo: drivers[driverId],
     status: "REQUESTED",
     fare,
     distance,
@@ -116,41 +123,59 @@ app.post("/api/ride", async (req, res) => {
 // ================= ACCEPT =================
 app.patch("/api/ride/:id/accept", async (req, res) => {
   const { driverId } = req.body;
+
   const ride = await Ride.findById(req.params.id);
+
+  if (!ride || ride.status !== "REQUESTED") {
+    return res.status(400).json({ error: "Not available" });
+  }
 
   ride.status = "ACCEPTED";
   ride.driverId = driverId;
-  ride.driverInfo = drivers[driverId];
 
   await ride.save();
 
   io.emit("ride:update", ride);
+
   res.json(ride);
 });
 
 // ================= STATUS =================
 app.patch("/api/ride/:id/status", async (req, res) => {
   const ride = await Ride.findById(req.params.id);
+
+  if (!ride) return res.status(404).json({ error: "Not found" });
+
   ride.status = req.body.status;
+
   await ride.save();
 
   io.emit("ride:update", ride);
+
   res.json(ride);
 });
 
 // ================= CANCEL =================
 app.patch("/api/ride/:id/cancel", async (req, res) => {
   const ride = await Ride.findById(req.params.id);
+
+  if (!ride) return res.status(404).json({ error: "Not found" });
+
   ride.status = "CANCELLED";
+
   await ride.save();
 
   io.emit("ride:update", ride);
+
   res.json(ride);
 });
 
 // ================= GET =================
 app.get("/api/rides", async (req, res) => {
-  res.json(await Ride.find().sort({ createdAt: -1 }));
+  const rides = await Ride.find().sort({ createdAt: -1 });
+  res.json(rides);
 });
 
-server.listen(3000, () => console.log("🚀 Step N server running"));
+server.listen(3000, () => {
+  console.log("🚀 FIXED server running");
+});
