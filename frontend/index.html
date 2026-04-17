@@ -1,105 +1,40 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Uber Clone Step I (Final UI)</title>
-
+  <title>Uber Clone Final</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
   <style>
-    body {
-      margin: 0;
-      font-family: Arial;
-      overflow: hidden;
-    }
-
-    .container {
-      display: flex;
-      height: 100vh;
-    }
-
-    .panel {
-      width: 50%;
-      padding: 10px;
-      overflow-y: auto;
-    }
-
-    .rider {
-      background: #f7f7ff;
-      border-right: 2px solid #ddd;
-    }
-
-    .driver {
-      background: #fff7f7;
-    }
-
-    #map {
-      height: 250px;
-      margin-top: 10px;
-      border: 1px solid #ccc;
-    }
-
-    .ride {
-      border: 1px solid #ccc;
-      padding: 10px;
-      margin: 10px 0;
-      background: white;
-    }
-
-    button {
-      padding: 6px 10px;
-      margin: 3px;
-      cursor: pointer;
-    }
-
-    input {
-      padding: 6px;
-      margin: 3px;
-      width: 80%;
-    }
-
-    .title {
-      font-weight: bold;
-      font-size: 18px;
-    }
-
-    .small {
-      font-size: 12px;
-      color: #666;
-    }
-
+    body { font-family: Arial; padding: 20px; }
+    #map { height: 300px; margin-top: 10px; }
+    .ride { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
   </style>
 </head>
 
 <body>
 
-<div class="container">
+<h1>🚗 Uber Clone Final</h1>
 
-  <!-- ================= RIDER ================= -->
-  <div class="panel rider">
-    <div class="title">🚗 Rider App</div>
+<div id="status">Loading...</div>
 
-    <input id="pickup" placeholder="Pickup address"/>
-    <input id="destination" placeholder="Destination"/>
+<button onclick="setMode('rider')">Rider</button>
+<button onclick="setMode('driver')">Driver</button>
+<button id="driverToggle" onclick="toggleDriver()">Go ONLINE</button>
 
-    <button onclick="createRide()">Create Ride</button>
+<br><br>
 
-    <div id="riderRides"></div>
+<input id="pickup" placeholder="Pickup">
+<input id="destination" placeholder="Drop">
 
-    <div id="map"></div>
-  </div>
+<button onclick="createRide()">Create Ride</button>
 
-  <!-- ================= DRIVER ================= -->
-  <div class="panel driver">
-    <div class="title">🚕 Driver App</div>
+<div id="rides"></div>
 
-    <button onclick="toggleDriver()">Toggle Online</button>
+<h3>Map</h3>
+<div id="map"></div>
 
-    <div id="driverRides"></div>
-
-    <div class="small" id="driverStatus">Offline</div>
-  </div>
-
-</div>
+<h3>Debug</h3>
+<pre id="log"></pre>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
