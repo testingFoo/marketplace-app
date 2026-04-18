@@ -23,34 +23,21 @@ window.onload = () => {
     loadRides();
   });
 
-  socket.on("ride:update", (ride) => {
-    console.log("🔄 UPDATE:", ride);
-    loadRides();
-  });
+  socket.on("ride:update", () => loadRides());
+
+  // 🔥 AUTOCOMPLETE LISTENERS
+  document.getElementById("pickup").addEventListener("input", handlePickupInput);
+  document.getElementById("destination").addEventListener("input", handleDropInput);
 
   loadRides();
 };
 
 // ================= MAP =================
 function initMap() {
-  map = L.map("map").setView([50.0647, 19.9450], 13); // Krakow
+  map = L.map("map").setView([50.0647, 19.9450], 13);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png")
     .addTo(map);
-
-  map.on("click", (e) => {
-    const { lat, lng } = e.latlng;
-
-    if (!pickup) {
-      pickup = { lat, lng };
-      document.getElementById("pickup").value =
-        `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    } else {
-      drop = { lat, lng };
-      document.getElementById("destination").value =
-        `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    }
-  });
 }
 
 // ================= ROUTE =================
@@ -89,6 +76,75 @@ function animateDriver(coords) {
   }, 120);
 }
 
+// ================= AUTOCOMPLETE =================
+async function searchPlaces(query) {
+  if (!query || query.length < 3) return [];
+
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=json&q=${query}`
+  );
+
+  return await res.json();
+}
+
+function debounce(fn, delay = 400) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+}
+
+// ================= PICKUP INPUT =================
+const handlePickupInput = debounce(async () => {
+  const input = document.getElementById("pickup").value;
+
+  const results = await searchPlaces(input);
+
+  renderSuggestions(results, "pickup");
+});
+
+// ================= DROP INPUT =================
+const handleDropInput = debounce(async () => {
+  const input = document.getElementById("destination").value;
+
+  const results = await searchPlaces(input);
+
+  renderSuggestions(results, "drop");
+});
+
+// ================= RENDER DROPDOWN =================
+function renderSuggestions(list, type) {
+  const box = document.getElementById(type + "Suggestions");
+  box.innerHTML = "";
+
+  list.slice(0, 5).forEach(place => {
+    const div = document.createElement("div");
+    div.className = "suggestion";
+    div.innerText = place.display_name;
+
+    div.onclick = () => {
+      if (type === "pickup") {
+        document.getElementById("pickup").value = place.display_name;
+        pickup = {
+          lat: parseFloat(place.lat),
+          lng: parseFloat(place.lon)
+        };
+      } else {
+        document.getElementById("destination").value = place.display_name;
+        drop = {
+          lat: parseFloat(place.lat),
+          lng: parseFloat(place.lon)
+        };
+      }
+
+      box.innerHTML = "";
+    };
+
+    box.appendChild(div);
+  });
+}
+
 // ================= CREATE =================
 function createRide() {
   if (!pickup || !drop) {
@@ -109,7 +165,7 @@ function createRide() {
   });
 }
 
-// ================= DRIVER ACTIONS =================
+// ================= DRIVER =================
 function acceptRide(id) {
   fetch(`${API}/api/ride/${id}/accept`, {
     method: "PATCH",
@@ -177,7 +233,6 @@ function renderDriver(rides) {
 
   rides.forEach(r => {
 
-    // 🔥 SHOW REQUESTED RIDES (FIXED BUG)
     if (r.status === "REQUESTED") {
       box.innerHTML += `
         <div class="ride">
@@ -188,7 +243,6 @@ function renderDriver(rides) {
       `;
     }
 
-    // DRIVER ACTIVE RIDE
     if (r.driverId === driverId) {
       box.innerHTML += `
         <div class="ride">
