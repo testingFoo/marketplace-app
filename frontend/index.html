@@ -1,90 +1,67 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Uber Clone Clean</title>
+  <title>Uber Clone Stable</title>
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
-  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
   <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-    }
-
-    .container {
-      display: flex;
-      height: 100vh;
-    }
+    body { margin: 0; font-family: Arial; }
+    .container { display: flex; height: 100vh; }
 
     .panel {
       width: 50%;
       padding: 15px;
       overflow-y: auto;
-      position: relative;
       box-sizing: border-box;
     }
 
-    .rider {
-      background: #f4f8ff;
-      border-right: 2px solid #ccc;
-    }
-
-    .driver {
-      background: #fff4f4;
-    }
-
-    h2 {
-      margin-top: 0;
-    }
-
-    .input-wrapper {
-      position: relative;
-      width: 90%;
-    }
+    .rider { background: #f4f8ff; border-right: 1px solid #ccc; }
+    .driver { background: #fff4f4; }
 
     input {
+      width: 95%;
       padding: 8px;
-      width: 100%;
-      margin-bottom: 5px;
-      box-sizing: border-box;
+      margin-bottom: 6px;
     }
 
     button {
-      padding: 6px 10px;
-      margin: 5px 0;
-      cursor: pointer;
-      border: none;
-      background: #333;
+      padding: 8px;
+      background: black;
       color: white;
-      border-radius: 4px;
-    }
-
-    button:hover {
-      background: #555;
+      border: none;
+      cursor: pointer;
     }
 
     .ride {
-      border: 1px solid #ccc;
+      background: white;
       padding: 10px;
       margin: 10px 0;
-      background: white;
-      border-radius: 6px;
+      border: 1px solid #ddd;
     }
 
     #map {
       height: 300px;
       margin-top: 10px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
     }
 
-    #etaBox {
-      margin-top: 5px;
-      font-weight: bold;
-      color: green;
+    .suggestions {
+      position: absolute;
+      background: white;
+      border: 1px solid #ddd;
+      width: 95%;
+      z-index: 9999;
+    }
+
+    .suggestions div {
+      padding: 6px;
+      cursor: pointer;
+    }
+
+    .suggestions div:hover {
+      background: #eee;
     }
   </style>
 </head>
@@ -93,17 +70,14 @@
 
 <div class="container">
 
-  <!-- RIDER PANEL -->
   <div class="panel rider">
-    <h2>🚗 Rider</h2>
+    <h2>Rider</h2>
 
-    <div class="input-wrapper">
-      <input id="pickup" placeholder="Pickup address">
-    </div>
+    <input id="pickup" placeholder="Pickup"/>
+    <div id="pickupList" class="suggestions"></div>
 
-    <div class="input-wrapper">
-      <input id="destination" placeholder="Destination address">
-    </div>
+    <input id="destination" placeholder="Destination"/>
+    <div id="dropList" class="suggestions"></div>
 
     <button onclick="createRide()">Create Ride</button>
 
@@ -112,22 +86,16 @@
     <div id="map"></div>
   </div>
 
-  <!-- DRIVER PANEL -->
   <div class="panel driver">
-    <h2>🚕 Driver</h2>
-
+    <h2>Driver</h2>
     <div id="driverRides"></div>
   </div>
 
 </div>
 
-<!-- SOCKET.IO -->
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-
-<!-- LEAFLET -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<!-- YOUR APP -->
 <script src="app.js"></script>
 
 </body>
