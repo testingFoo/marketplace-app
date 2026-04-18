@@ -1,14 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Uber Clone Split UI</title>
+  <title>Uber Clone Step Q</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
   <style>
     html, body {
       margin: 0;
-      padding: 0;
       height: 100%;
       font-family: Arial;
     }
@@ -16,7 +15,6 @@
     .container {
       display: flex;
       height: 100vh;
-      width: 100%;
     }
 
     .panel {
@@ -25,17 +23,11 @@
       overflow-y: auto;
     }
 
-    .rider {
-      background: #f4f8ff;
-      border-right: 2px solid #ccc;
-    }
-
-    .driver {
-      background: #fff4f4;
-    }
+    .rider { background: #f4f8ff; }
+    .driver { background: #fff4f4; }
 
     #map {
-      height: 250px;
+      height: 300px;
       margin-top: 10px;
       border: 1px solid #ccc;
     }
@@ -47,20 +39,33 @@
       background: white;
     }
 
+    input {
+      width: 90%;
+      padding: 6px;
+      margin: 4px 0;
+    }
+
     button {
       padding: 6px 10px;
       margin: 4px;
       cursor: pointer;
     }
 
-    input {
-      padding: 6px;
-      margin: 4px 0;
-      width: 90%;
+    .suggestions {
+      border: 1px solid #ccc;
+      background: white;
+      max-width: 300px;
+      position: relative;
+      z-index: 1000;
     }
 
-    h2 {
-      margin-top: 0;
+    .suggestion {
+      padding: 6px;
+      cursor: pointer;
+    }
+
+    .suggestion:hover {
+      background: #eee;
     }
   </style>
 </head>
@@ -69,12 +74,15 @@
 
 <div class="container">
 
-  <!-- LEFT: RIDER -->
+  <!-- RIDER -->
   <div class="panel rider">
     <h2>🚗 Rider</h2>
 
-    <input id="pickup" placeholder="Pickup"/>
-    <input id="destination" placeholder="Destination"/>
+    <input id="pickup" placeholder="Pickup address"/>
+    <div id="pickupSuggestions" class="suggestions"></div>
+
+    <input id="destination" placeholder="Destination address"/>
+    <div id="dropSuggestions" class="suggestions"></div>
 
     <button onclick="createRide()">Create Ride</button>
 
@@ -83,12 +91,9 @@
     <div id="map"></div>
   </div>
 
-  <!-- RIGHT: DRIVER -->
+  <!-- DRIVER -->
   <div class="panel driver">
     <h2>🚕 Driver</h2>
-
-    <button onclick="toggleDriver()">Toggle Online</button>
-    <div id="driverStatus">Offline</div>
 
     <div id="driverRides"></div>
   </div>
