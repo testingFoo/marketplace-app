@@ -1,14 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Uber Clone Step Q</title>
+  <title>Uber Clone Clean</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
   <style>
-    html, body {
+    body {
       margin: 0;
-      height: 100%;
       font-family: Arial;
     }
 
@@ -21,15 +20,28 @@
       width: 50%;
       padding: 15px;
       overflow-y: auto;
+      position: relative;
     }
 
-    .rider { background: #f4f8ff; }
-    .driver { background: #fff4f4; }
+    .rider {
+      background: #f4f8ff;
+      border-right: 2px solid #ccc;
+    }
 
-    #map {
-      height: 300px;
-      margin-top: 10px;
-      border: 1px solid #ccc;
+    .driver {
+      background: #fff4f4;
+    }
+
+    input {
+      padding: 8px;
+      width: 90%;
+      margin-bottom: 5px;
+    }
+
+    button {
+      padding: 6px 10px;
+      margin: 5px 0;
+      cursor: pointer;
     }
 
     .ride {
@@ -39,33 +51,15 @@
       background: white;
     }
 
-    input {
-      width: 90%;
-      padding: 6px;
-      margin: 4px 0;
-    }
-
-    button {
-      padding: 6px 10px;
-      margin: 4px;
-      cursor: pointer;
-    }
-
-    .suggestions {
+    #map {
+      height: 300px;
+      margin-top: 10px;
       border: 1px solid #ccc;
-      background: white;
-      max-width: 300px;
+    }
+
+    .input-wrapper {
       position: relative;
-      z-index: 1000;
-    }
-
-    .suggestion {
-      padding: 6px;
-      cursor: pointer;
-    }
-
-    .suggestion:hover {
-      background: #eee;
+      width: 90%;
     }
   </style>
 </head>
@@ -78,11 +72,13 @@
   <div class="panel rider">
     <h2>🚗 Rider</h2>
 
-    <input id="pickup" placeholder="Pickup address"/>
-    <div id="pickupSuggestions" class="suggestions"></div>
+    <div class="input-wrapper">
+      <input id="pickup" placeholder="Pickup address">
+    </div>
 
-    <input id="destination" placeholder="Destination address"/>
-    <div id="dropSuggestions" class="suggestions"></div>
+    <div class="input-wrapper">
+      <input id="destination" placeholder="Destination address">
+    </div>
 
     <button onclick="createRide()">Create Ride</button>
 
