@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Driver Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+  <style>
+    body { margin:0; font-family:Arial; display:flex; }
+
+    .panel {
+      width:400px;
+      background:#111;
+      color:white;
+      padding:15px;
+      height:100vh;
+      overflow:auto;
+    }
+
+    .card {
+      background:#1c1c1c;
+      padding:10px;
+      margin:10px 0;
+      border-left:3px solid lime;
+    }
+
+    button {
+      width:100%;
+      padding:8px;
+      margin-top:5px;
+      background:lime;
+      border:none;
+      cursor:pointer;
+    }
+
+    #map {
+      flex:1;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="panel">
+  <h2>Driver Dashboard</h2>
+
+  <div id="profile"></div>
+
+  <button onclick="toggleOnline()">Toggle Online</button>
+
+  <h3>Available Jobs</h3>
+  <div id="jobs"></div>
+</div>
+
+<div id="map"></div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script src="driver.js"></script>
+
+</body>
+</html>
