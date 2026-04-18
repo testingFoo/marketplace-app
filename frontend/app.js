@@ -3,6 +3,8 @@ const API = "https://marketplace-app-m8ac.onrender.com";
 let socket;
 let map;
 let routeLine;
+let driverMarker;
+let movementInterval;
 
 let userId = localStorage.getItem("userId") || ("user_" + Date.now());
 let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
@@ -30,16 +32,24 @@ function initSocket() {
   });
 
   socket.on("ride:new", (data) => {
-    console.log("🚗 ride:new", data);
-
     if (data.route && data.route.coords) {
       drawRoute(data.route.coords);
+    }
+    loadRides();
+  });
+
+  socket.on("ride:update", (ride) => {
+    if (ride.route && ride.route.coords) {
+      drawRoute(ride.route.coords);
+    }
+
+    // 🔥 START MOVEMENT WHEN DRIVER ACCEPTS
+    if (ride.status === "ACCEPTED" && ride.driverId === driverId) {
+      startDriverMovement(ride.route.coords, ride.duration);
     }
 
     loadRides();
   });
-
-  socket.on("ride:update", loadRides);
 }
 
 // ================= MAP =================
@@ -49,8 +59,6 @@ function initMap() {
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "OSM"
   }).addTo(map);
-
-  console.log("🗺️ Map ready");
 }
 
 // ================= DRAW ROUTE =================
@@ -69,8 +77,50 @@ function drawRoute(coords) {
   }).addTo(map);
 
   map.fitBounds(routeLine.getBounds());
+}
 
-  console.log("✅ Route drawn");
+// ================= DRIVER MOVEMENT =================
+function startDriverMovement(coords, duration) {
+  if (!coords || coords.length === 0) return;
+
+  if (movementInterval) {
+    clearInterval(movementInterval);
+  }
+
+  let index = 0;
+  const latlngs = coords.map(c => [c[1], c[0]]);
+
+  if (driverMarker) {
+    map.removeLayer(driverMarker);
+  }
+
+  driverMarker = L.marker(latlngs[0]).addTo(map);
+
+  const totalPoints = latlngs.length;
+  const intervalTime = (duration * 1000) / totalPoints;
+
+  movementInterval = setInterval(() => {
+    if (index >= totalPoints) {
+      clearInterval(movementInterval);
+      return;
+    }
+
+    driverMarker.setLatLng(latlngs[index]);
+
+    // 🔥 Update ETA
+    const remaining = Math.max(0, duration - (duration * index / totalPoints));
+    updateETA(Math.round(remaining / 60));
+
+    index++;
+  }, intervalTime);
+}
+
+// ================= ETA =================
+function updateETA(minutes) {
+  const el = document.getElementById("etaBox");
+  if (el) {
+    el.innerText = "Driver arriving in " + minutes + " min";
+  }
 }
 
 // ================= AUTOCOMPLETE =================
@@ -83,7 +133,6 @@ async function searchAddress(query) {
 
 function setupAutocomplete(inputId, type) {
   const input = document.getElementById(inputId);
-
   const wrapper = input.parentElement;
 
   const list = document.createElement("div");
@@ -103,42 +152,34 @@ function setupAutocomplete(inputId, type) {
       return;
     }
 
-    try {
-      const results = await searchAddress(q);
+    const results = await searchAddress(q);
+    list.innerHTML = "";
 
-      list.innerHTML = "";
+    results.slice(0, 5).forEach(r => {
+      const item = document.createElement("div");
 
-      results.slice(0, 5).forEach(r => {
-        const item = document.createElement("div");
+      item.innerText = r.display_name;
+      item.style.padding = "6px";
+      item.style.cursor = "pointer";
 
-        item.innerText = r.display_name;
-        item.style.padding = "6px";
-        item.style.cursor = "pointer";
+      item.onclick = () => {
+        input.value = r.display_name;
 
-        item.onclick = () => {
-          input.value = r.display_name;
-
-          const coords = {
-            lat: parseFloat(r.lat),
-            lng: parseFloat(r.lon)
-          };
-
-          if (type === "pickup") pickup = coords;
-          if (type === "drop") drop = coords;
-
-          list.innerHTML = "";
-
-          L.marker([coords.lat, coords.lng]).addTo(map);
-
-          console.log("📍 Selected", coords);
+        const coords = {
+          lat: parseFloat(r.lat),
+          lng: parseFloat(r.lon)
         };
 
-        list.appendChild(item);
-      });
+        if (type === "pickup") pickup = coords;
+        if (type === "drop") drop = coords;
 
-    } catch (err) {
-      console.log("❌ Autocomplete error", err);
-    }
+        list.innerHTML = "";
+
+        L.marker([coords.lat, coords.lng]).addTo(map);
+      };
+
+      list.appendChild(item);
+    });
   });
 }
 
@@ -186,6 +227,7 @@ function renderRider(rides) {
           Fare: ${r.fare} PLN<br/>
           ETA: ${Math.round(r.duration / 60)} min<br/>
           Driver: ${r.driverId || "Searching..."}<br/>
+          <div id="etaBox"></div>
         </div>
       `;
     });
@@ -245,7 +287,6 @@ function updateStatus(id, status) {
   });
 }
 
-// ================= GLOBAL =================
 window.createRide = createRide;
 window.acceptRide = acceptRide;
 window.updateStatus = updateStatus;
