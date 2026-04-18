@@ -166,4 +166,15 @@ app.get("/api/rides", async (req,res)=>{
   res.json(rides);
 });
 
+app.post("/api/driver/toggle", (req, res) => {
+  const { driverId } = req.body;
+
+  if (onlineDrivers[driverId]) {
+    delete onlineDrivers[driverId];
+  } else {
+    onlineDrivers[driverId] = true;
+  }
+
+  res.json({ online: !!onlineDrivers[driverId] });
+});
 server.listen(3000, ()=>console.log("🚀 STEP O READY"));
