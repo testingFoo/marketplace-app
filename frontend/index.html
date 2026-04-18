@@ -1,84 +1,108 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Uber Clone Live</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Stealth Dispatch</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
   <style>
-    body { margin:0; font-family:Arial; }
-    .container { display:flex; height:100vh; }
+    body { margin:0; font-family:Arial; display:flex; height:100vh; }
 
-    .panel { width:50%; padding:15px; overflow:auto; }
-    .rider { background:#f4f8ff; }
-    .driver { background:#fff4f4; }
+    /* LEFT PANEL */
+    .left {
+      width:420px;
+      background:#111;
+      color:white;
+      padding:15px;
+      overflow:auto;
+    }
 
-    input { width:95%; padding:8px; margin-bottom:5px; }
-
-    button {
-      padding:8px;
-      background:black;
+    .tabbar button {
+      width:100%;
+      margin:5px 0;
+      padding:10px;
+      background:#222;
       color:white;
       border:none;
-    }
-
-    .ride {
-      background:white;
-      padding:10px;
-      margin:10px 0;
-      border:1px solid #ddd;
-    }
-
-    #map { height:300px; margin-top:10px; }
-
-    .suggestions {
-      position:absolute;
-      background:white;
-      border:1px solid #ccc;
-      width:95%;
-      z-index:9999;
-    }
-
-    .suggestions div {
-      padding:6px;
       cursor:pointer;
     }
 
-    .suggestions div:hover { background:#eee; }
+    .tabbar button:hover { background:#333; }
+
+    input {
+      width:100%;
+      padding:10px;
+      margin:5px 0;
+      border:none;
+    }
+
+    .card {
+      background:#1c1c1c;
+      padding:10px;
+      margin:10px 0;
+      border-left:3px solid orange;
+    }
+
+    button.action {
+      width:100%;
+      padding:8px;
+      margin-top:5px;
+      background:orange;
+      border:none;
+    }
+
+    /* MAP */
+    #map {
+      flex:1;
+    }
+
+    .suggestions {
+      background:white;
+      color:black;
+      position:absolute;
+      width:380px;
+      z-index:999;
+    }
+
+    .suggestions div {
+      padding:5px;
+      cursor:pointer;
+    }
   </style>
 </head>
 
 <body>
 
-<div class="container">
+<div class="left">
 
-  <div class="panel rider">
-    <h2>Rider</h2>
+  <h2>STEALTH</h2>
 
-    <input id="pickup" placeholder="Pickup"/>
+  <div class="tabbar">
+    <button onclick="setTab('passenger')">🚕 Passenger</button>
+    <button onclick="setTab('parcel')">📦 Parcel</button>
+    <button onclick="setTab('freight')">🚚 Freight</button>
+  </div>
+
+  <div id="inputs">
+
+    <input id="origin" placeholder="Origin"/>
     <input id="destination" placeholder="Destination"/>
 
-    <button onclick="createRide()">Create Ride</button>
+    <div id="originList"></div>
+    <div id="destinationList"></div>
 
-    <div id="riderRides"></div>
+    <button onclick="submit()">Submit</button>
 
-    <div id="map"></div>
   </div>
 
-  <div class="panel driver">
-    <h2>Driver</h2>
-    <div id="driverRides"></div>
-  </div>
+  <div id="list"></div>
 
 </div>
 
+<div id="map"></div>
+
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<script>
-  window.MAPBOX_TOKEN = "YOUR_MAPBOX_TOKEN";
-</script>
 
 <script src="app.js"></script>
 
