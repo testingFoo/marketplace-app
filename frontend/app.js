@@ -59,46 +59,62 @@ function setupAutocomplete(inputId, type) {
   const input = document.getElementById(inputId);
 
   const list = document.createElement("div");
-  list.style.border = "1px solid #ccc";
-  list.style.background = "white";
   list.style.position = "absolute";
-  list.style.zIndex = 1000;
-  list.style.width = "250px";
+  list.style.background = "white";
+  list.style.border = "1px solid #ccc";
+  list.style.zIndex = "9999";
+  list.style.width = input.offsetWidth + "px";
 
   input.parentNode.appendChild(list);
 
   input.addEventListener("input", async () => {
     const q = input.value;
-    if (q.length < 3) return;
 
-    const results = await searchAddress(q);
+    if (q.length < 3) {
+      list.innerHTML = "";
+      return;
+    }
 
-    list.innerHTML = "";
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${q}`
+      );
 
-    results.slice(0, 5).forEach(r => {
-      const item = document.createElement("div");
-      item.innerText = r.display_name;
-      item.style.padding = "5px";
-      item.style.cursor = "pointer";
+      const results = await res.json();
 
-      item.onclick = () => {
-        input.value = r.display_name;
+      list.innerHTML = "";
 
-        const coords = {
-          lat: parseFloat(r.lat),
-          lng: parseFloat(r.lon)
+      results.slice(0, 5).forEach(r => {
+        const item = document.createElement("div");
+
+        item.innerText = r.display_name;
+        item.style.padding = "6px";
+        item.style.cursor = "pointer";
+
+        item.onclick = () => {
+          input.value = r.display_name;
+
+          const coords = {
+            lat: parseFloat(r.lat),
+            lng: parseFloat(r.lon)
+          };
+
+          if (type === "pickup") pickup = coords;
+          if (type === "drop") drop = coords;
+
+          list.innerHTML = "";
+
+          L.marker([coords.lat, coords.lng]).addTo(map);
+
+          console.log("✅ Selected:", coords);
         };
 
-        if (type === "pickup") pickup = coords;
-        if (type === "drop") drop = coords;
+        list.appendChild(item);
+      });
 
-        list.innerHTML = "";
-
-        L.marker([coords.lat, coords.lng]).addTo(map);
-      };
-
-      list.appendChild(item);
-    });
+    } catch (err) {
+      console.log("❌ Search error", err);
+    }
   });
 }
 
