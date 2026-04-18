@@ -13,18 +13,25 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
+// ================= DATA =================
 let rides = [];
+let driverLocations = {};
 
 // ================= SOCKET =================
 io.on("connection", (socket) => {
-  console.log("User connected");
+  console.log("connected");
 
-  socket.on("disconnect", () => {
-    console.log("User disconnected");
+  socket.on("driver:location", (data) => {
+    driverLocations[data.driverId] = {
+      lat: data.lat,
+      lng: data.lng
+    };
+
+    io.emit("driver:location:update", data);
   });
 });
 
-// ================= ROUTES =================
+// ================= API =================
 app.get("/api/rides", (req, res) => {
   res.json(rides);
 });
@@ -34,11 +41,11 @@ app.post("/api/ride", (req, res) => {
     _id: Date.now().toString(),
     ...req.body,
     status: "REQUESTED",
+    driverId: null,
     fare: Math.floor(Math.random() * 30) + 10
   };
 
   rides.push(ride);
-
   io.emit("ride:new", ride);
 
   res.json(ride);
@@ -50,7 +57,6 @@ app.patch("/api/ride/:id/accept", (req, res) => {
   if (ride) {
     ride.status = "ACCEPTED";
     ride.driverId = req.body.driverId;
-
     io.emit("ride:update", ride);
   }
 
@@ -60,10 +66,11 @@ app.patch("/api/ride/:id/accept", (req, res) => {
 app.patch("/api/ride/:id/status", (req, res) => {
   const ride = rides.find(r => r._id === req.params.id);
 
-  if (ride) {
-    ride.status = req.body.status;
-    io.emit("ride:update", ride);
-  }
+  if (!ride) return res.json({ error: "not found" });
+
+  ride.status = req.body.status;
+
+  io.emit("ride:update", ride);
 
   res.json(ride);
 });
@@ -71,5 +78,5 @@ app.patch("/api/ride/:id/status", (req, res) => {
 // ================= START =================
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
-  console.log("Server running on", PORT);
+  console.log("running on", PORT);
 });
