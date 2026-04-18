@@ -1,180 +1,251 @@
-const express = require("express");
-const cors = require("cors");
-const mongoose = require("mongoose");
-const http = require("http");
-const { Server } = require("socket.io");
-const axios = require("axios");
+const API = "https://marketplace-app-m8ac.onrender.com";
 
-const app = express();
-const server = http.createServer(app);
+let socket;
+let map;
+let routeLine;
 
-const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET","POST","PATCH"] }
-});
+let userId = localStorage.getItem("userId") || ("user_" + Date.now());
+let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
 
-app.use(express.json());
-app.use(cors());
+let pickup = null;
+let drop = null;
 
-// ================= DB =================
-mongoose.connect(process.env.MONGO_URI)
-  .then(()=>console.log("🟢 MongoDB Connected"))
-  .catch(err=>console.log(err));
+// ================= INIT =================
+window.onload = () => {
+  initMap();
+  initSocket();
 
-// ================= STATE =================
-let onlineDrivers = {};
-let driverLocations = {};
+  setupAutocomplete("pickup", "pickup");
+  setupAutocomplete("destination", "drop");
 
-// ================= ROUTE =================
-async function getRoute(pickup, drop) {
-  try {
-    const url =
-      `https://router.project-osrm.org/route/v1/driving/` +
-      `${pickup.lng},${pickup.lat};${drop.lng},${drop.lat}` +
-      `?overview=full&geometries=geojson`;
-
-    const res = await axios.get(url);
-    const route = res.data.routes[0];
-
-    if (!route) return null;
-
-    return {
-      coords: route.geometry.coordinates,
-      distance: route.distance,
-      duration: route.duration
-    };
-  } catch {
-    return null;
-  }
-}
-
-// ================= FARE =================
-function calculateFare(distance, duration) {
-  const base = 8;
-  const perKm = 2.5;
-  const perMin = 0.5;
-
-  return Math.round(
-    base +
-    (distance/1000)*perKm +
-    (duration/60)*perMin
-  );
-}
+  loadRides();
+};
 
 // ================= SOCKET =================
-io.on("connection", (socket) => {
+function initSocket() {
+  socket = io(API);
 
-  socket.on("driver:online", (driverId) => {
-    onlineDrivers[driverId] = { socketId: socket.id };
+  socket.on("connect", () => {
+    console.log("🟢 Socket connected");
   });
 
-  socket.on("driver:offline", (driverId) => {
-    delete onlineDrivers[driverId];
+  socket.on("ride:new", (data) => {
+    console.log("🚗 ride:new", data);
+
+    if (data.route && data.route.coords) {
+      drawRoute(data.route.coords);
+    }
+
+    loadRides();
   });
 
-  socket.on("driver:location", (data) => {
-    driverLocations[data.driverId] = data;
-    io.emit("driver:move", data);
-  });
+  socket.on("ride:update", loadRides);
+}
 
-});
+// ================= MAP =================
+function initMap() {
+  map = L.map("map").setView([50.0647, 19.9450], 13);
 
-// ================= MODEL =================
-const Ride = mongoose.model("Ride", new mongoose.Schema({
-  userId: String,
-  driverId: String,
-  pickup: String,
-  destination: String,
-  pickupCoords: Object,
-  dropCoords: Object,
-  status: String,
-  fare: Number,
-  distance: Number,
-  duration: Number,
-  route: Array
-}));
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "OSM"
+  }).addTo(map);
 
-// ================= CREATE =================
-app.post("/api/ride", async (req, res) => {
-  const { pickup, destination, pickupCoords, dropCoords, userId } = req.body;
+  console.log("🗺️ Map ready");
+}
 
-  const route = await getRoute(pickupCoords, dropCoords);
+// ================= DRAW ROUTE =================
+function drawRoute(coords) {
+  if (!coords || coords.length === 0) return;
 
-  let fare = 0;
-  let distance = 0;
-  let duration = 0;
+  const latlngs = coords.map(c => [c[1], c[0]]);
 
-  if (route) {
-    fare = calculateFare(route.distance, route.duration);
-    distance = route.distance;
-    duration = route.duration;
+  if (routeLine) {
+    map.removeLayer(routeLine);
   }
 
-  const ride = await Ride.create({
-    pickup,
-    destination,
-    pickupCoords,
-    dropCoords,
-    userId,
-    status: "REQUESTED",
-    fare,
-    distance,
-    duration,
-    route: route?.coords || []
+  routeLine = L.polyline(latlngs, {
+    weight: 5,
+    color: "blue"
+  }).addTo(map);
+
+  map.fitBounds(routeLine.getBounds());
+
+  console.log("✅ Route drawn");
+}
+
+// ================= AUTOCOMPLETE =================
+async function searchAddress(query) {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=json&q=${query}`
+  );
+  return await res.json();
+}
+
+function setupAutocomplete(inputId, type) {
+  const input = document.getElementById(inputId);
+
+  const wrapper = input.parentElement;
+
+  const list = document.createElement("div");
+  list.style.position = "absolute";
+  list.style.background = "white";
+  list.style.border = "1px solid #ccc";
+  list.style.zIndex = "9999";
+  list.style.width = "100%";
+
+  wrapper.appendChild(list);
+
+  input.addEventListener("input", async () => {
+    const q = input.value;
+
+    if (q.length < 3) {
+      list.innerHTML = "";
+      return;
+    }
+
+    try {
+      const results = await searchAddress(q);
+
+      list.innerHTML = "";
+
+      results.slice(0, 5).forEach(r => {
+        const item = document.createElement("div");
+
+        item.innerText = r.display_name;
+        item.style.padding = "6px";
+        item.style.cursor = "pointer";
+
+        item.onclick = () => {
+          input.value = r.display_name;
+
+          const coords = {
+            lat: parseFloat(r.lat),
+            lng: parseFloat(r.lon)
+          };
+
+          if (type === "pickup") pickup = coords;
+          if (type === "drop") drop = coords;
+
+          list.innerHTML = "";
+
+          L.marker([coords.lat, coords.lng]).addTo(map);
+
+          console.log("📍 Selected", coords);
+        };
+
+        list.appendChild(item);
+      });
+
+    } catch (err) {
+      console.log("❌ Autocomplete error", err);
+    }
   });
+}
 
-  io.emit("ride:new", ride);
-
-  res.json(ride);
-});
-
-// ================= ACCEPT =================
-app.patch("/api/ride/:id/accept", async (req, res) => {
-  const { driverId } = req.body;
-
-  const ride = await Ride.findById(req.params.id);
-
-  if (!ride || ride.status !== "REQUESTED")
-    return res.status(400).json({ error: "Not available" });
-
-  ride.status = "ACCEPTED";
-  ride.driverId = driverId;
-
-  await ride.save();
-  io.emit("ride:update", ride);
-
-  res.json(ride);
-});
-
-// ================= STATUS =================
-app.patch("/api/ride/:id/status", async (req, res) => {
-  const { status } = req.body;
-
-  const ride = await Ride.findById(req.params.id);
-  if (!ride) return res.status(404).json({});
-
-  ride.status = status;
-  await ride.save();
-
-  io.emit("ride:update", ride);
-
-  res.json(ride);
-});
-
-// ================= GET =================
-app.get("/api/rides", async (req,res)=>{
-  const rides = await Ride.find().sort({_id:-1});
-  res.json(rides);
-});
-
-app.post("/api/driver/toggle", (req, res) => {
-  const { driverId } = req.body;
-
-  if (onlineDrivers[driverId]) {
-    delete onlineDrivers[driverId];
-  } else {
-    onlineDrivers[driverId] = true;
+// ================= CREATE RIDE =================
+function createRide() {
+  if (!pickup || !drop) {
+    alert("Select pickup and destination");
+    return;
   }
 
-  res.json({ online: !!onlineDrivers[driverId] });
-});
-server.listen(3000, ()=>console.log("🚀 STEP O READY"));
+  fetch(`${API}/api/ride`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      pickup: document.getElementById("pickup").value,
+      destination: document.getElementById("destination").value,
+      pickupCoords: pickup,
+      dropCoords: drop,
+      userId
+    })
+  });
+}
+
+// ================= LOAD =================
+function loadRides() {
+  fetch(`${API}/api/rides`)
+    .then(r => r.json())
+    .then(data => {
+      renderRider(data);
+      renderDriver(data);
+    });
+}
+
+// ================= RIDER =================
+function renderRider(rides) {
+  const box = document.getElementById("riderRides");
+  box.innerHTML = "";
+
+  rides.filter(r => r.userId === userId)
+    .forEach(r => {
+      box.innerHTML += `
+        <div class="ride">
+          ${r.pickup} → ${r.destination}<br/>
+          Status: ${r.status}<br/>
+          Fare: ${r.fare} PLN<br/>
+          ETA: ${Math.round(r.duration / 60)} min<br/>
+          Driver: ${r.driverId || "Searching..."}<br/>
+        </div>
+      `;
+    });
+}
+
+// ================= DRIVER =================
+function renderDriver(rides) {
+  const box = document.getElementById("driverRides");
+  box.innerHTML = "";
+
+  rides.forEach(r => {
+
+    if (r.status === "REQUESTED") {
+      box.innerHTML += `
+        <div class="ride">
+          ${r.pickup} → ${r.destination}<br/>
+          ${r.fare} PLN<br/>
+          <button onclick="acceptRide('${r._id}')">Accept</button>
+        </div>
+      `;
+    }
+
+    if (r.driverId === driverId) {
+      box.innerHTML += `
+        <div class="ride">
+          ${r.pickup} → ${r.destination}<br/>
+          Status: ${r.status}<br/>
+
+          ${r.status === "ACCEPTED"
+            ? `<button onclick="updateStatus('${r._id}','ARRIVING')">Arriving</button>` : ""}
+
+          ${r.status === "ARRIVING"
+            ? `<button onclick="updateStatus('${r._id}','IN_PROGRESS')">Start</button>` : ""}
+
+          ${r.status === "IN_PROGRESS"
+            ? `<button onclick="updateStatus('${r._id}','COMPLETED')">Complete</button>` : ""}
+        </div>
+      `;
+    }
+  });
+}
+
+// ================= ACTIONS =================
+function acceptRide(id) {
+  fetch(`${API}/api/ride/${id}/accept`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ driverId })
+  });
+}
+
+function updateStatus(id, status) {
+  fetch(`${API}/api/ride/${id}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status })
+  });
+}
+
+// ================= GLOBAL =================
+window.createRide = createRide;
+window.acceptRide = acceptRide;
+window.updateStatus = updateStatus;
