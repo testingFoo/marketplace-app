@@ -1,6 +1,10 @@
 const API = "https://marketplace-app-m8ac.onrender.com";
 
+// =====================
+// STATE
+// =====================
 let socket;
+
 let userId = localStorage.getItem("userId") || ("user_" + Date.now());
 let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
 
@@ -11,144 +15,176 @@ let map;
 let routeLine;
 let driverMarker;
 
-// ================= INIT =================
+// =====================
+// INIT
+// =====================
 window.onload = () => {
   initMap();
+  initSocket();
+  loadRides();
+  setupAutocomplete();
+};
 
+// =====================
+// SOCKET
+// =====================
+function initSocket() {
   socket = io(API);
 
   socket.on("ride:new", (data) => {
-    console.log("🚕 NEW RIDE:", data);
-    if (data.route) drawRoute(data.route);
+    if (data.route) drawRoute(data.route.coords);
     loadRides();
   });
 
-  socket.on("ride:update", () => loadRides());
+  socket.on("ride:update", (ride) => {
+    loadRides();
+  });
 
-  // 🔥 AUTOCOMPLETE LISTENERS
-  document.getElementById("pickup").addEventListener("input", handlePickupInput);
-  document.getElementById("destination").addEventListener("input", handleDropInput);
-
-  loadRides();
-};
-
-// ================= MAP =================
-function initMap() {
-  map = L.map("map").setView([50.0647, 19.9450], 13);
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png")
-    .addTo(map);
-}
-
-// ================= ROUTE =================
-function drawRoute(route) {
-  if (!route || !route.coords) return;
-
-  if (routeLine) map.removeLayer(routeLine);
-
-  const latlngs = route.coords.map(c => [c[1], c[0]]);
-
-  routeLine = L.polyline(latlngs, { color: "blue" }).addTo(map);
-
-  map.fitBounds(routeLine.getBounds());
-
-  animateDriver(latlngs);
-}
-
-// ================= DRIVER ANIMATION =================
-function animateDriver(coords) {
-  if (!coords || coords.length < 2) return;
-
-  let i = 0;
-
-  if (driverMarker) map.removeLayer(driverMarker);
-
-  driverMarker = L.marker(coords[0]).addTo(map);
-
-  const interval = setInterval(() => {
-    if (i >= coords.length) {
-      clearInterval(interval);
-      return;
-    }
-
-    driverMarker.setLatLng(coords[i]);
-    i++;
-  }, 120);
-}
-
-// ================= AUTOCOMPLETE =================
-async function searchPlaces(query) {
-  if (!query || query.length < 3) return [];
-
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=json&q=${query}`
-  );
-
-  return await res.json();
-}
-
-function debounce(fn, delay = 400) {
-  let timer;
-  return (...args) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), delay);
-  };
-}
-
-// ================= PICKUP INPUT =================
-const handlePickupInput = debounce(async () => {
-  const input = document.getElementById("pickup").value;
-
-  const results = await searchPlaces(input);
-
-  renderSuggestions(results, "pickup");
-});
-
-// ================= DROP INPUT =================
-const handleDropInput = debounce(async () => {
-  const input = document.getElementById("destination").value;
-
-  const results = await searchPlaces(input);
-
-  renderSuggestions(results, "drop");
-});
-
-// ================= RENDER DROPDOWN =================
-function renderSuggestions(list, type) {
-  const box = document.getElementById(type + "Suggestions");
-  box.innerHTML = "";
-
-  list.slice(0, 5).forEach(place => {
-    const div = document.createElement("div");
-    div.className = "suggestion";
-    div.innerText = place.display_name;
-
-    div.onclick = () => {
-      if (type === "pickup") {
-        document.getElementById("pickup").value = place.display_name;
-        pickup = {
-          lat: parseFloat(place.lat),
-          lng: parseFloat(place.lon)
-        };
-      } else {
-        document.getElementById("destination").value = place.display_name;
-        drop = {
-          lat: parseFloat(place.lat),
-          lng: parseFloat(place.lon)
-        };
-      }
-
-      box.innerHTML = "";
-    };
-
-    box.appendChild(div);
+  socket.on("driver:move", (data) => {
+    moveDriverMarker(data.lat, data.lng);
   });
 }
 
-// ================= CREATE =================
+// =====================
+// MAP
+// =====================
+function initMap() {
+  map = L.map("map").setView([50.0647, 19.9450], 13); // Krakow
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "OpenStreetMap"
+  }).addTo(map);
+}
+
+// =====================
+// ROUTE DRAW
+// =====================
+function drawRoute(coords) {
+  if (routeLine) map.removeLayer(routeLine);
+
+  routeLine = L.polyline(
+    coords.map(c => [c[1], c[0]]),
+    { color: "blue", weight: 4 }
+  ).addTo(map);
+
+  map.fitBounds(routeLine.getBounds());
+
+  animateDriver(coords);
+}
+
+// =====================
+// DRIVER ANIMATION (REAL FIX)
+// =====================
+function animateDriver(coords) {
+  if (driverMarker) map.removeLayer(driverMarker);
+
+  let i = 0;
+
+  driverMarker = L.marker([coords[0][1], coords[0][0]]).addTo(map);
+
+  function move() {
+    if (i >= coords.length) return;
+
+    const [lng, lat] = coords[i];
+    driverMarker.setLatLng([lat, lng]);
+
+    if (socket) {
+      socket.emit("driver:location", {
+        driverId,
+        lat,
+        lng
+      });
+    }
+
+    i++;
+    setTimeout(move, 200); // smooth motion
+  }
+
+  move();
+}
+
+// =====================
+// DRIVER MARKER UPDATE
+// =====================
+function moveDriverMarker(lat, lng) {
+  if (!driverMarker) {
+    driverMarker = L.marker([lat, lng]).addTo(map);
+  } else {
+    driverMarker.setLatLng([lat, lng]);
+  }
+}
+
+// =====================
+// AUTOCOMPLETE (FREE)
+// =====================
+function setupAutocomplete() {
+  setupInput("pickup", (coords, label) => {
+    pickup = coords;
+  });
+
+  setupInput("destination", (coords, label) => {
+    drop = coords;
+  });
+}
+
+function setupInput(id, callback) {
+  const input = document.getElementById(id);
+
+  const dropdown = document.createElement("div");
+  dropdown.style.border = "1px solid #ccc";
+  dropdown.style.background = "white";
+  dropdown.style.position = "absolute";
+  dropdown.style.zIndex = "1000";
+  dropdown.style.width = "250px";
+
+  input.parentNode.appendChild(dropdown);
+
+  input.addEventListener("input", async () => {
+    const q = input.value;
+    if (q.length < 3) {
+      dropdown.innerHTML = "";
+      return;
+    }
+
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${q}`
+    );
+    const data = await res.json();
+
+    dropdown.innerHTML = "";
+
+    data.slice(0, 5).forEach(place => {
+      const item = document.createElement("div");
+      item.innerText = place.display_name;
+      item.style.padding = "5px";
+      item.style.cursor = "pointer";
+
+      item.onclick = () => {
+        input.value = place.display_name;
+        dropdown.innerHTML = "";
+
+        callback(
+          {
+            lat: parseFloat(place.lat),
+            lng: parseFloat(place.lon)
+          },
+          place.display_name
+        );
+
+        map.setView([place.lat, place.lon], 15);
+      };
+
+      dropdown.appendChild(item);
+    });
+  });
+}
+
+// =====================
+// CREATE RIDE
+// =====================
 function createRide() {
   if (!pickup || !drop) {
-    alert("Select pickup & drop");
+    alert("Select pickup & destination");
     return;
   }
 
@@ -165,7 +201,9 @@ function createRide() {
   });
 }
 
-// ================= DRIVER =================
+// =====================
+// DRIVER ACTIONS
+// =====================
 function acceptRide(id) {
   fetch(`${API}/api/ride/${id}/accept`, {
     method: "PATCH",
@@ -188,7 +226,9 @@ function cancelRide(id) {
   });
 }
 
-// ================= LOAD =================
+// =====================
+// LOAD RIDES
+// =====================
 function loadRides() {
   fetch(`${API}/api/rides`)
     .then(r => r.json())
@@ -198,9 +238,13 @@ function loadRides() {
     });
 }
 
-// ================= RIDER =================
+// =====================
+// RIDER UI
+// =====================
 function renderRider(rides) {
   const box = document.getElementById("riderRides");
+  if (!box) return;
+
   box.innerHTML = "";
 
   rides
@@ -209,14 +253,10 @@ function renderRider(rides) {
       box.innerHTML += `
         <div class="ride">
           ${r.pickup} → ${r.destination}<br/>
-          Status: <b>${r.status}</b><br/>
-          Fare: ${r.fare} PLN<br/>
+          Status: ${r.status}<br/>
+          Fare: ${r.fare || 0} PLN<br/>
+          ETA: ${r.duration ? Math.round(r.duration/60) : "-"} min<br/>
           Driver: ${r.driverId || "Searching..."}<br/>
-
-          ${r.status === "ACCEPTED" ? "🚗 Driver on the way" : ""}
-          ${r.status === "ARRIVING" ? "📍 Driver arrived" : ""}
-          ${r.status === "IN_PROGRESS" ? "🟢 Trip started" : ""}
-          ${r.status === "COMPLETED" ? "✅ Trip completed" : ""}
 
           ${r.status !== "COMPLETED" && r.status !== "CANCELLED"
             ? `<button onclick="cancelRide('${r._id}')">Cancel</button>`
@@ -226,23 +266,29 @@ function renderRider(rides) {
     });
 }
 
-// ================= DRIVER =================
+// =====================
+// DRIVER UI
+// =====================
 function renderDriver(rides) {
   const box = document.getElementById("driverRides");
+  if (!box) return;
+
   box.innerHTML = "";
 
   rides.forEach(r => {
 
+    // NEW RIDES
     if (r.status === "REQUESTED") {
       box.innerHTML += `
         <div class="ride">
           ${r.pickup} → ${r.destination}<br/>
-          Fare: ${r.fare} PLN<br/>
+          💰 ${r.fare || 0} PLN<br/>
           <button onclick="acceptRide('${r._id}')">Accept</button>
         </div>
       `;
     }
 
+    // MY RIDES
     if (r.driverId === driverId) {
       box.innerHTML += `
         <div class="ride">
@@ -263,10 +309,13 @@ function renderDriver(rides) {
         </div>
       `;
     }
+
   });
 }
 
-// ================= GLOBAL =================
+// =====================
+// EXPORT GLOBALS
+// =====================
 window.createRide = createRide;
 window.acceptRide = acceptRide;
 window.updateStatus = updateStatus;
