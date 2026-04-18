@@ -43,7 +43,6 @@ function initSocket() {
       drawRoute(ride.route.coords);
     }
 
-    // 🔥 START MOVEMENT WHEN DRIVER ACCEPTS
     if (ride.status === "ACCEPTED" && ride.driverId === driverId) {
       startDriverMovement(ride.route.coords, ride.duration);
     }
@@ -83,16 +82,12 @@ function drawRoute(coords) {
 function startDriverMovement(coords, duration) {
   if (!coords || coords.length === 0) return;
 
-  if (movementInterval) {
-    clearInterval(movementInterval);
-  }
+  if (movementInterval) clearInterval(movementInterval);
 
   let index = 0;
   const latlngs = coords.map(c => [c[1], c[0]]);
 
-  if (driverMarker) {
-    map.removeLayer(driverMarker);
-  }
+  if (driverMarker) map.removeLayer(driverMarker);
 
   driverMarker = L.marker(latlngs[0]).addTo(map);
 
@@ -107,7 +102,6 @@ function startDriverMovement(coords, duration) {
 
     driverMarker.setLatLng(latlngs[index]);
 
-    // 🔥 Update ETA
     const remaining = Math.max(0, duration - (duration * index / totalPoints));
     updateETA(Math.round(remaining / 60));
 
@@ -121,6 +115,21 @@ function updateETA(minutes) {
   if (el) {
     el.innerText = "Driver arriving in " + minutes + " min";
   }
+}
+
+// ================= GEOCODE =================
+async function geocodeAddress(text) {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=json&q=${text}`
+  );
+  const data = await res.json();
+
+  if (!data || data.length === 0) return null;
+
+  return {
+    lat: parseFloat(data[0].lat),
+    lng: parseFloat(data[0].lon)
+  };
 }
 
 // ================= AUTOCOMPLETE =================
@@ -183,10 +192,22 @@ function setupAutocomplete(inputId, type) {
   });
 }
 
-// ================= CREATE RIDE =================
-function createRide() {
+// ================= CREATE RIDE (FIXED) =================
+async function createRide() {
+  const pickupText = document.getElementById("pickup").value;
+  const dropText = document.getElementById("destination").value;
+
+  // 🔥 Fallback if user didn’t click dropdown
+  if (!pickup && pickupText) {
+    pickup = await geocodeAddress(pickupText);
+  }
+
+  if (!drop && dropText) {
+    drop = await geocodeAddress(dropText);
+  }
+
   if (!pickup || !drop) {
-    alert("Select pickup and destination");
+    alert("Could not find location. Try selecting from suggestions.");
     return;
   }
 
@@ -194,8 +215,8 @@ function createRide() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      pickup: document.getElementById("pickup").value,
-      destination: document.getElementById("destination").value,
+      pickup: pickupText,
+      destination: dropText,
       pickupCoords: pickup,
       dropCoords: drop,
       userId
