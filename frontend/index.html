@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Stealth Dispatch</title>
+  <title>Stealth Transport</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
@@ -11,50 +12,44 @@
     /* LEFT PANEL */
     .left {
       width:420px;
-      background:#111;
+      background:#0f0f0f;
       color:white;
       padding:15px;
       overflow:auto;
     }
 
-    .tabbar button {
+    .tabs button {
       width:100%;
-      margin:5px 0;
       padding:10px;
-      background:#222;
+      margin:5px 0;
+      background:#1c1c1c;
       color:white;
       border:none;
       cursor:pointer;
     }
 
-    .tabbar button:hover { background:#333; }
+    .tabs button:hover { background:#2a2a2a; }
 
     input {
       width:100%;
       padding:10px;
       margin:5px 0;
       border:none;
+      background:#222;
+      color:white;
     }
 
     .card {
-      background:#1c1c1c;
+      background:#1b1b1b;
       padding:10px;
       margin:10px 0;
       border-left:3px solid orange;
     }
 
-    button.action {
-      width:100%;
-      padding:8px;
-      margin-top:5px;
-      background:orange;
-      border:none;
-    }
+    .section { display:none; }
+    .active { display:block; }
 
-    /* MAP */
-    #map {
-      flex:1;
-    }
+    #map { flex:1; }
 
     .suggestions {
       background:white;
@@ -65,8 +60,12 @@
     }
 
     .suggestions div {
-      padding:5px;
+      padding:6px;
       cursor:pointer;
+    }
+
+    .suggestions div:hover {
+      background:#eee;
     }
   </style>
 </head>
@@ -75,27 +74,40 @@
 
 <div class="left">
 
-  <h2>STEALTH</h2>
+  <h2>STEALTH MARKET</h2>
 
-  <div class="tabbar">
+  <div class="tabs">
     <button onclick="setTab('passenger')">🚕 Passenger</button>
     <button onclick="setTab('parcel')">📦 Parcel</button>
-    <button onclick="setTab('freight')">🚚 Freight</button>
+    <button onclick="setTab('freight')">🚚 Freight (DAT)</button>
   </div>
 
-  <div id="inputs">
+  <!-- ROUTE INPUTS -->
+  <input id="origin" placeholder="Origin"/>
+  <input id="destination" placeholder="Destination"/>
 
-    <input id="origin" placeholder="Origin"/>
-    <input id="destination" placeholder="Destination"/>
+  <div id="originList" class="suggestions"></div>
+  <div id="destinationList" class="suggestions"></div>
 
-    <div id="originList"></div>
-    <div id="destinationList"></div>
+  <button onclick="submitRide()">Submit</button>
 
-    <button onclick="submit()">Submit</button>
-
+  <!-- PASSENGER -->
+  <div id="passenger" class="section active">
+    <h3>Passenger Rides</h3>
+    <div id="rides"></div>
   </div>
 
-  <div id="list"></div>
+  <!-- PARCEL -->
+  <div id="parcel" class="section">
+    <h3>Parcel Jobs</h3>
+    <div id="parcelList"></div>
+  </div>
+
+  <!-- FREIGHT -->
+  <div id="freight" class="section">
+    <h3>DAT Loadboard</h3>
+    <div id="loadboard"></div>
+  </div>
 
 </div>
 
