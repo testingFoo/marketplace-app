@@ -11,68 +11,68 @@ let drop = null;
 let userId = localStorage.getItem("userId") || ("user_" + Date.now());
 let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
 
+let driverMarkers = {};
+let simInterval;
+
+// ================= INIT =================
 window.onload = () => {
   initMap();
   initSocket();
-
-  setupAutocomplete("pickup", "pickup");
-  setupAutocomplete("destination", "drop");
-
+  setupAutocomplete("pickup");
+  setupAutocomplete("destination");
   loadRides();
 };
 
 // ================= SOCKET =================
 function initSocket() {
-  socket = io(API, {
-    reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 2000
-  });
+  socket = io(API);
 
   socket.on("ride:new", loadRides);
   socket.on("ride:update", loadRides);
+
+  socket.on("driver:location:update", (data) => {
+    const { driverId, lat, lng } = data;
+
+    if (!driverMarkers[driverId]) {
+      driverMarkers[driverId] = L.marker([lat, lng]).addTo(map);
+    } else {
+      driverMarkers[driverId].setLatLng([lat, lng]);
+    }
+  });
 }
 
 // ================= MAP =================
 function initMap() {
   map = L.map("map").setView([50.0647, 19.9450], 13);
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "OSM"
-  }).addTo(map);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 }
 
-// ================= MAPBOX SEARCH =================
-async function searchAddress(query) {
+// ================= MAPBOX =================
+async function searchAddress(q) {
   const res = await fetch(
-    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&autocomplete=true&limit=5`
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${q}.json?access_token=${MAPBOX_TOKEN}&autocomplete=true&limit=5`
   );
   const data = await res.json();
-  return data.features;
+  return data.features || [];
 }
 
 // ================= AUTOCOMPLETE =================
-function setupAutocomplete(inputId, type) {
-  const input = document.getElementById(inputId);
-  const wrapper = input.parentElement;
-
+function setupAutocomplete(id) {
+  const input = document.getElementById(id);
   const list = document.createElement("div");
   list.className = "suggestions";
-  wrapper.appendChild(list);
+  input.parentElement.appendChild(list);
 
   let timer;
 
   input.addEventListener("input", () => {
     clearTimeout(timer);
 
-    const q = input.value;
-    if (q.length < 3) {
-      list.innerHTML = "";
-      return;
-    }
+    if (input.value.length < 3) return;
 
     timer = setTimeout(async () => {
-      const results = await searchAddress(q);
+      const results = await searchAddress(input.value);
       list.innerHTML = "";
 
       results.forEach(r => {
@@ -87,8 +87,8 @@ function setupAutocomplete(inputId, type) {
             lat: r.center[1]
           };
 
-          if (type === "pickup") pickup = coords;
-          if (type === "drop") drop = coords;
+          if (id === "pickup") pickup = coords;
+          if (id === "destination") drop = coords;
 
           list.innerHTML = "";
 
@@ -103,49 +103,75 @@ function setupAutocomplete(inputId, type) {
   });
 }
 
-// ================= MAPBOX ROUTE =================
+// ================= ROUTE =================
 async function drawRoute() {
-  if (!pickup || !drop) return;
-
   const res = await fetch(
-    `https://api.mapbox.com/directions/v5/mapbox/driving/${pickup.lng},${pickup.lat};${drop.lng},${drop.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`
+    `https://api.mapbox.com/directions/v5/mapbox/driving/${pickup.lng},${pickup.lat};${drop.lng},${drop.lat}?geometries=geojson&access_token=${MAPBOX_TOKEN}`
   );
 
   const data = await res.json();
   const coords = data.routes[0].geometry.coordinates;
 
-  const latlngs = coords.map(c => [c[1], c[0]]);
+  const path = coords.map(c => [c[1], c[0]]);
 
   if (routeLine) map.removeLayer(routeLine);
 
-  routeLine = L.polyline(latlngs, {
-    color: "blue",
-    weight: 5
-  }).addTo(map);
-
+  routeLine = L.polyline(path, { color: "blue" }).addTo(map);
   map.fitBounds(routeLine.getBounds());
 }
 
 // ================= CREATE RIDE =================
-async function createRide() {
-  if (!pickup || !drop) {
-    alert("Select pickup and destination");
-    return;
-  }
-
-  await fetch(`${API}/api/ride`, {
+function createRide() {
+  fetch(`${API}/api/ride`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      pickup: document.getElementById("pickup").value,
-      destination: document.getElementById("destination").value,
+      pickup: "A",
+      destination: "B",
       pickupCoords: pickup,
       dropCoords: drop,
       userId
     })
   });
+}
 
-  loadRides();
+// ================= DRIVER FLOW =================
+function acceptRide(id) {
+  fetch(`${API}/api/ride/${id}/accept`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ driverId })
+  });
+
+  startDriverSimulation();
+}
+
+// ================= LIVE DRIVER SIM =================
+function startDriverSimulation() {
+  let lat = 50.0647;
+  let lng = 19.9450;
+
+  if (simInterval) clearInterval(simInterval);
+
+  simInterval = setInterval(() => {
+    lat += (Math.random() - 0.5) * 0.002;
+    lng += (Math.random() - 0.5) * 0.002;
+
+    socket.emit("driver:location", {
+      driverId,
+      lat,
+      lng
+    });
+  }, 2000);
+}
+
+// ================= STATUS FLOW =================
+function updateStatus(id, status) {
+  fetch(`${API}/api/ride/${id}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status })
+  });
 }
 
 // ================= LOAD =================
@@ -157,34 +183,25 @@ function loadRides() {
 
 // ================= RENDER =================
 function render(rides) {
-  renderRider(rides);
-  renderDriver(rides);
-}
+  const rider = document.getElementById("riderRides");
+  const driver = document.getElementById("driverRides");
 
-// ================= RIDER =================
-function renderRider(rides) {
-  const box = document.getElementById("riderRides");
-  box.innerHTML = "";
-
-  rides.filter(r => r.userId === userId).forEach(r => {
-    box.innerHTML += `
-      <div class="ride">
-        ${r.pickup} → ${r.destination}<br/>
-        Status: ${r.status}<br/>
-        Fare: ${r.fare || "—"} PLN
-      </div>
-    `;
-  });
-}
-
-// ================= DRIVER =================
-function renderDriver(rides) {
-  const box = document.getElementById("driverRides");
-  box.innerHTML = "";
+  rider.innerHTML = "";
+  driver.innerHTML = "";
 
   rides.forEach(r => {
+
+    if (r.userId === userId) {
+      rider.innerHTML += `
+        <div class="ride">
+          ${r.pickup} → ${r.destination}<br/>
+          ${r.status}
+        </div>
+      `;
+    }
+
     if (r.status === "REQUESTED") {
-      box.innerHTML += `
+      driver.innerHTML += `
         <div class="ride">
           ${r.pickup} → ${r.destination}<br/>
           <button onclick="acceptRide('${r._id}')">Accept</button>
@@ -193,24 +210,21 @@ function renderDriver(rides) {
     }
 
     if (r.driverId === driverId) {
-      box.innerHTML += `
+      driver.innerHTML += `
         <div class="ride">
           ${r.pickup} → ${r.destination}<br/>
-          ${r.status}
+          ${r.status}<br/>
+
+          ${r.status === "ACCEPTED" ? `<button onclick="updateStatus('${r._id}','ARRIVING')">Arriving</button>` : ""}
+          ${r.status === "ARRIVING" ? `<button onclick="updateStatus('${r._id}','IN_PROGRESS')">Start</button>` : ""}
+          ${r.status === "IN_PROGRESS" ? `<button onclick="updateStatus('${r._id}','COMPLETED')">Finish</button>` : ""}
         </div>
       `;
     }
   });
 }
 
-// ================= ACTIONS =================
-function acceptRide(id) {
-  fetch(`${API}/api/ride/${id}/accept`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ driverId })
-  });
-}
-
+// ================= GLOBAL =================
 window.createRide = createRide;
 window.acceptRide = acceptRide;
+window.updateStatus = updateStatus;
