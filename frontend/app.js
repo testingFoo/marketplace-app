@@ -1,13 +1,12 @@
 const API = "https://marketplace-app-m8ac.onrender.com";
+const MAPBOX_TOKEN = "pk.eyJ1IjoibWFwZnVycWFuIiwiYSI6ImNtbzRoMGdnbjEzZXkydnF3MWFhN2t5aWcifQ.A7GlM3WDlLWHBl6lQCHKEA";
 
 let socket;
 let map;
+let routeLine;
 
 let pickup = null;
 let drop = null;
-
-let pickupTimer;
-let dropTimer;
 
 let userId = localStorage.getItem("userId") || ("user_" + Date.now());
 let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
@@ -16,15 +15,19 @@ window.onload = () => {
   initMap();
   initSocket();
 
-  setupAutocomplete("pickup", "pickupList", "pickup");
-  setupAutocomplete("destination", "dropList", "drop");
+  setupAutocomplete("pickup", "pickup");
+  setupAutocomplete("destination", "drop");
 
   loadRides();
 };
 
 // ================= SOCKET =================
 function initSocket() {
-  socket = io(API);
+  socket = io(API, {
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 2000
+  });
 
   socket.on("ride:new", loadRides);
   socket.on("ride:update", loadRides);
@@ -39,38 +42,49 @@ function initMap() {
   }).addTo(map);
 }
 
-// ================= DEBOUNCED SEARCH =================
-function setupAutocomplete(inputId, listId, type) {
+// ================= MAPBOX SEARCH =================
+async function searchAddress(query) {
+  const res = await fetch(
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&autocomplete=true&limit=5`
+  );
+  const data = await res.json();
+  return data.features;
+}
+
+// ================= AUTOCOMPLETE =================
+function setupAutocomplete(inputId, type) {
   const input = document.getElementById(inputId);
-  const list = document.getElementById(listId);
+  const wrapper = input.parentElement;
+
+  const list = document.createElement("div");
+  list.className = "suggestions";
+  wrapper.appendChild(list);
+
+  let timer;
 
   input.addEventListener("input", () => {
-    clearTimeout(type === "pickup" ? pickupTimer : dropTimer);
+    clearTimeout(timer);
 
-    const query = input.value;
-    if (query.length < 3) {
+    const q = input.value;
+    if (q.length < 3) {
       list.innerHTML = "";
       return;
     }
 
-    const timer = setTimeout(async () => {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${query}`
-      );
-
-      const data = await res.json();
+    timer = setTimeout(async () => {
+      const results = await searchAddress(q);
       list.innerHTML = "";
 
-      data.slice(0, 5).forEach(item => {
+      results.forEach(r => {
         const div = document.createElement("div");
-        div.innerText = item.display_name;
+        div.innerText = r.place_name;
 
         div.onclick = () => {
-          input.value = item.display_name;
+          input.value = r.place_name;
 
           const coords = {
-            lat: parseFloat(item.lat),
-            lng: parseFloat(item.lon)
+            lng: r.center[0],
+            lat: r.center[1]
           };
 
           if (type === "pickup") pickup = coords;
@@ -79,50 +93,59 @@ function setupAutocomplete(inputId, listId, type) {
           list.innerHTML = "";
 
           L.marker([coords.lat, coords.lng]).addTo(map);
+
+          if (pickup && drop) drawRoute();
         };
 
         list.appendChild(div);
       });
-    }, 400);
-
-    if (type === "pickup") pickupTimer = timer;
-    if (type === "drop") dropTimer = timer;
+    }, 300);
   });
 }
 
-// ================= CREATE RIDE (FIXED) =================
+// ================= MAPBOX ROUTE =================
+async function drawRoute() {
+  if (!pickup || !drop) return;
+
+  const res = await fetch(
+    `https://api.mapbox.com/directions/v5/mapbox/driving/${pickup.lng},${pickup.lat};${drop.lng},${drop.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`
+  );
+
+  const data = await res.json();
+  const coords = data.routes[0].geometry.coordinates;
+
+  const latlngs = coords.map(c => [c[1], c[0]]);
+
+  if (routeLine) map.removeLayer(routeLine);
+
+  routeLine = L.polyline(latlngs, {
+    color: "blue",
+    weight: 5
+  }).addTo(map);
+
+  map.fitBounds(routeLine.getBounds());
+}
+
+// ================= CREATE RIDE =================
 async function createRide() {
-  const pickupText = document.getElementById("pickup").value;
-  const dropText = document.getElementById("destination").value;
-
-  if (!pickupText || !dropText) {
-    alert("Enter addresses first");
-    return;
-  }
-
   if (!pickup || !drop) {
-    alert("Select suggestions (don’t type only)");
+    alert("Select pickup and destination");
     return;
   }
 
-  const res = await fetch(`${API}/api/ride`, {
+  await fetch(`${API}/api/ride`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      pickup: pickupText,
-      destination: dropText,
+      pickup: document.getElementById("pickup").value,
+      destination: document.getElementById("destination").value,
       pickupCoords: pickup,
       dropCoords: drop,
       userId
     })
   });
 
-  if (!res.ok) {
-    alert("Failed to create ride");
-  } else {
-    console.log("Ride created");
-    loadRides();
-  }
+  loadRides();
 }
 
 // ================= LOAD =================
@@ -147,8 +170,8 @@ function renderRider(rides) {
     box.innerHTML += `
       <div class="ride">
         ${r.pickup} → ${r.destination}<br/>
-        ${r.status}<br/>
-        ${r.fare} PLN
+        Status: ${r.status}<br/>
+        Fare: ${r.fare || "—"} PLN
       </div>
     `;
   });
