@@ -10,12 +10,32 @@ let driverId = localStorage.getItem("driverId") || ("driver_" + Date.now());
 let pickup = null;
 let drop = null;
 
+// ================= INIT =================
+window.onload = () => {
+  initMap();
+  initSocket();
+
+  setupAutocomplete("pickup", "pickup");
+  setupAutocomplete("destination", "drop");
+
+  loadRides();
+};
+
 // ================= SOCKET =================
 function initSocket() {
   socket = io(API);
 
+  socket.on("connect", () => {
+    console.log("🟢 Socket connected");
+  });
+
   socket.on("ride:new", (data) => {
-    if (data.route) drawRoute(data.route.coords);
+    console.log("🚗 ride:new", data);
+
+    if (data.route && data.route.coords) {
+      drawRoute(data.route.coords);
+    }
+
     loadRides();
   });
 
@@ -24,7 +44,7 @@ function initSocket() {
 
 // ================= MAP =================
 function initMap() {
-  map = L.map("map").setView([52.2297, 21.0122], 13);
+  map = L.map("map").setView([50.0647, 19.9450], 13);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "OSM"
@@ -35,16 +55,22 @@ function initMap() {
 
 // ================= DRAW ROUTE =================
 function drawRoute(coords) {
-  if (!coords || !map) return;
+  if (!coords || coords.length === 0) return;
 
-  // FIX: convert [lng, lat] → [lat, lng]
-  const fixed = coords.map(c => [c[1], c[0]]);
+  const latlngs = coords.map(c => [c[1], c[0]]);
 
-  if (routeLine) map.removeLayer(routeLine);
+  if (routeLine) {
+    map.removeLayer(routeLine);
+  }
 
-  routeLine = L.polyline(fixed).addTo(map);
+  routeLine = L.polyline(latlngs, {
+    weight: 5,
+    color: "blue"
+  }).addTo(map);
 
   map.fitBounds(routeLine.getBounds());
+
+  console.log("✅ Route drawn");
 }
 
 // ================= AUTOCOMPLETE =================
@@ -58,14 +84,16 @@ async function searchAddress(query) {
 function setupAutocomplete(inputId, type) {
   const input = document.getElementById(inputId);
 
+  const wrapper = input.parentElement;
+
   const list = document.createElement("div");
   list.style.position = "absolute";
   list.style.background = "white";
   list.style.border = "1px solid #ccc";
   list.style.zIndex = "9999";
-  list.style.width = input.offsetWidth + "px";
+  list.style.width = "100%";
 
-  input.parentNode.appendChild(list);
+  wrapper.appendChild(list);
 
   input.addEventListener("input", async () => {
     const q = input.value;
@@ -76,11 +104,7 @@ function setupAutocomplete(inputId, type) {
     }
 
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${q}`
-      );
-
-      const results = await res.json();
+      const results = await searchAddress(q);
 
       list.innerHTML = "";
 
@@ -106,14 +130,14 @@ function setupAutocomplete(inputId, type) {
 
           L.marker([coords.lat, coords.lng]).addTo(map);
 
-          console.log("✅ Selected:", coords);
+          console.log("📍 Selected", coords);
         };
 
         list.appendChild(item);
       });
 
     } catch (err) {
-      console.log("❌ Search error", err);
+      console.log("❌ Autocomplete error", err);
     }
   });
 }
@@ -127,7 +151,7 @@ function createRide() {
 
   fetch(`${API}/api/ride`, {
     method: "POST",
-    headers: {"Content-Type":"application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       pickup: document.getElementById("pickup").value,
       destination: document.getElementById("destination").value,
@@ -138,7 +162,7 @@ function createRide() {
   });
 }
 
-// ================= LOAD RIDES =================
+// ================= LOAD =================
 function loadRides() {
   fetch(`${API}/api/rides`)
     .then(r => r.json())
@@ -160,7 +184,7 @@ function renderRider(rides) {
           ${r.pickup} → ${r.destination}<br/>
           Status: ${r.status}<br/>
           Fare: ${r.fare} PLN<br/>
-          ETA: ${Math.round(r.duration/60)} min<br/>
+          ETA: ${Math.round(r.duration / 60)} min<br/>
           Driver: ${r.driverId || "Searching..."}<br/>
         </div>
       `;
@@ -188,7 +212,7 @@ function renderDriver(rides) {
       box.innerHTML += `
         <div class="ride">
           ${r.pickup} → ${r.destination}<br/>
-          ${r.status}<br/>
+          Status: ${r.status}<br/>
 
           ${r.status === "ACCEPTED"
             ? `<button onclick="updateStatus('${r._id}','ARRIVING')">Arriving</button>` : ""}
@@ -208,7 +232,7 @@ function renderDriver(rides) {
 function acceptRide(id) {
   fetch(`${API}/api/ride/${id}/accept`, {
     method: "PATCH",
-    headers: {"Content-Type":"application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ driverId })
   });
 }
@@ -216,21 +240,10 @@ function acceptRide(id) {
 function updateStatus(id, status) {
   fetch(`${API}/api/ride/${id}/status`, {
     method: "PATCH",
-    headers: {"Content-Type":"application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status })
   });
 }
-
-// ================= INIT =================
-window.onload = () => {
-  initMap();
-  initSocket();
-
-  setupAutocomplete("pickup", "pickup");
-  setupAutocomplete("destination", "drop");
-
-  loadRides();
-};
 
 // ================= GLOBAL =================
 window.createRide = createRide;
