@@ -18,12 +18,15 @@ window.onload = () => {
   socket = io(API);
 
   socket.on("ride:new", (data) => {
-    drawRoute(data.route);
-    animateDriver(data.route);
+    console.log("🚕 NEW RIDE:", data);
+    if (data.route) drawRoute(data.route);
     loadRides();
   });
 
-  socket.on("ride:update", loadRides);
+  socket.on("ride:update", (ride) => {
+    console.log("🔄 UPDATE:", ride);
+    loadRides();
+  });
 
   loadRides();
 };
@@ -32,65 +35,66 @@ window.onload = () => {
 function initMap() {
   map = L.map("map").setView([50.0647, 19.9450], 13); // Krakow
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "OpenStreetMap"
-  }).addTo(map);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png")
+    .addTo(map);
 
-  map.on("click", async (e) => {
+  map.on("click", (e) => {
     const { lat, lng } = e.latlng;
-
-    const address = await reverseGeocode(lat, lng);
 
     if (!pickup) {
       pickup = { lat, lng };
-      document.getElementById("pickup").value = address;
+      document.getElementById("pickup").value =
+        `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     } else {
       drop = { lat, lng };
-      document.getElementById("destination").value = address;
+      document.getElementById("destination").value =
+        `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     }
   });
 }
 
-// ================= REVERSE GEOCODE =================
-async function reverseGeocode(lat, lng) {
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
-  );
+// ================= ROUTE =================
+function drawRoute(route) {
+  if (!route || !route.coords) return;
 
-  const data = await res.json();
-  return data.display_name || `${lat}, ${lng}`;
+  if (routeLine) map.removeLayer(routeLine);
+
+  const latlngs = route.coords.map(c => [c[1], c[0]]);
+
+  routeLine = L.polyline(latlngs, { color: "blue" }).addTo(map);
+
+  map.fitBounds(routeLine.getBounds());
+
+  animateDriver(latlngs);
 }
 
-// ================= SEARCH =================
-async function searchAddress(inputId) {
-  const q = document.getElementById(inputId).value;
+// ================= DRIVER ANIMATION =================
+function animateDriver(coords) {
+  if (!coords || coords.length < 2) return;
 
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=json&q=${q}`
-  );
+  let i = 0;
 
-  const data = await res.json();
+  if (driverMarker) map.removeLayer(driverMarker);
 
-  if (data.length === 0) return;
+  driverMarker = L.marker(coords[0]).addTo(map);
 
-  const r = data[0];
+  const interval = setInterval(() => {
+    if (i >= coords.length) {
+      clearInterval(interval);
+      return;
+    }
 
-  const coords = {
-    lat: parseFloat(r.lat),
-    lng: parseFloat(r.lon)
-  };
-
-  map.setView([coords.lat, coords.lng], 14);
-
-  if (inputId === "pickup") pickup = coords;
-  if (inputId === "destination") drop = coords;
-
-  document.getElementById(inputId).value = r.display_name;
+    driverMarker.setLatLng(coords[i]);
+    i++;
+  }, 120);
 }
 
 // ================= CREATE =================
 function createRide() {
-  if (!pickup || !drop) return alert("Select pickup/drop");
+  if (!pickup || !drop) {
+    alert("Select pickup & drop");
+    return;
+  }
 
   fetch(`${API}/api/ride`, {
     method: "POST",
@@ -105,50 +109,26 @@ function createRide() {
   });
 }
 
-// ================= ROUTE DRAW =================
-function drawRoute(route) {
-  if (!route) return;
-
-  if (routeLine) map.removeLayer(routeLine);
-
-  const latlngs = route.coords.map(c => [c[1], c[0]]);
-
-  routeLine = L.polyline(latlngs).addTo(map);
-
-  map.fitBounds(routeLine.getBounds());
-}
-
-// ================= DRIVER ANIMATION =================
-function animateDriver(route) {
-  if (!route) return;
-
-  const coords = route.coords;
-
-  let i = 0;
-
-  if (driverMarker) map.removeLayer(driverMarker);
-
-  driverMarker = L.marker([coords[0][1], coords[0][0]]).addTo(map);
-
-  const interval = setInterval(() => {
-    if (i >= coords.length) {
-      clearInterval(interval);
-      return;
-    }
-
-    const [lng, lat] = coords[i];
-    driverMarker.setLatLng([lat, lng]);
-
-    i++;
-  }, 200); // smooth speed
-}
-
-// ================= DRIVER =================
-function toggleDriver() {
-  fetch(`${API}/api/driver/toggle`, {
-    method: "POST",
+// ================= DRIVER ACTIONS =================
+function acceptRide(id) {
+  fetch(`${API}/api/ride/${id}/accept`, {
+    method: "PATCH",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({ driverId })
+  });
+}
+
+function updateStatus(id, status) {
+  fetch(`${API}/api/ride/${id}/status`, {
+    method: "PATCH",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ status })
+  });
+}
+
+function cancelRide(id) {
+  fetch(`${API}/api/ride/${id}/cancel`, {
+    method: "PATCH"
   });
 }
 
@@ -167,15 +147,24 @@ function renderRider(rides) {
   const box = document.getElementById("riderRides");
   box.innerHTML = "";
 
-  rides.filter(r => r.userId === userId)
+  rides
+    .filter(r => r.userId === userId)
     .forEach(r => {
       box.innerHTML += `
         <div class="ride">
           ${r.pickup} → ${r.destination}<br/>
-          Status: ${r.status}<br/>
+          Status: <b>${r.status}</b><br/>
           Fare: ${r.fare} PLN<br/>
-          ETA: ${Math.round(r.duration/60)} min<br/>
           Driver: ${r.driverId || "Searching..."}<br/>
+
+          ${r.status === "ACCEPTED" ? "🚗 Driver on the way" : ""}
+          ${r.status === "ARRIVING" ? "📍 Driver arrived" : ""}
+          ${r.status === "IN_PROGRESS" ? "🟢 Trip started" : ""}
+          ${r.status === "COMPLETED" ? "✅ Trip completed" : ""}
+
+          ${r.status !== "COMPLETED" && r.status !== "CANCELLED"
+            ? `<button onclick="cancelRide('${r._id}')">Cancel</button>`
+            : ""}
         </div>
       `;
     });
@@ -187,6 +176,8 @@ function renderDriver(rides) {
   box.innerHTML = "";
 
   rides.forEach(r => {
+
+    // 🔥 SHOW REQUESTED RIDES (FIXED BUG)
     if (r.status === "REQUESTED") {
       box.innerHTML += `
         <div class="ride">
@@ -197,6 +188,7 @@ function renderDriver(rides) {
       `;
     }
 
+    // DRIVER ACTIVE RIDE
     if (r.driverId === driverId) {
       box.innerHTML += `
         <div class="ride">
@@ -220,27 +212,8 @@ function renderDriver(rides) {
   });
 }
 
-// ================= ACTIONS =================
-function acceptRide(id) {
-  fetch(`${API}/api/ride/${id}/accept`, {
-    method: "PATCH",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ driverId })
-  });
-}
-
-function updateStatus(id, status) {
-  fetch(`${API}/api/ride/${id}/status`, {
-    method: "PATCH",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ status })
-  });
-}
-
 // ================= GLOBAL =================
 window.createRide = createRide;
 window.acceptRide = acceptRide;
 window.updateStatus = updateStatus;
-window.toggleDriver = toggleDriver;
-window.searchPickup = () => searchAddress("pickup");
-window.searchDrop = () => searchAddress("destination");
+window.cancelRide = cancelRide;
