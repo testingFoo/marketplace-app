@@ -4,6 +4,8 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const { Server } = require("socket.io");
 require("dotenv").config();
+const passport = require("passport");
+require("./config/passport")(passport);
 
 const rideRoutes = require("./routes/ride.routes");
 const authRoutes = require("./routes/auth.routes");
@@ -14,6 +16,7 @@ const server = http.createServer(app);
 
 app.use(cors());
 app.use(express.json());
+app.use(passport.initialize());
 
 // ================= SOCKET =================
 const io = new Server(server, {
@@ -31,6 +34,7 @@ mongoose.connect(process.env.MONGO_URL)
 app.use("/api/auth", authRoutes);
 app.use("/api/rides", rideRoutes);
 app.use("/api/drivers", driverRoutes);
+
 
 // ================= START =================
 const PORT = process.env.PORT || 10000;
