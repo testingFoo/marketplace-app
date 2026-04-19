@@ -8,7 +8,7 @@ const RideSchema = new mongoose.Schema({
 
   originCoords: Object,
   destinationCoords: Object,
-{ timestamps: true },
+
   status: {
     type: String,
     default: "REQUESTED"
@@ -24,6 +24,8 @@ const RideSchema = new mongoose.Schema({
   weight: String,
   distance: Number,
   rate: Number
+}, {
+  timestamps: true   // ✅ ADD THIS
 });
 
 module.exports = mongoose.model("Ride", RideSchema);
