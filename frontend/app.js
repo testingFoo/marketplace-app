@@ -129,7 +129,7 @@ function submitRide() {
     return;
   }
 
-  fetch(`${API}/api/ride`, {
+  fetch(`${API}/api/rides`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
