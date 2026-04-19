@@ -44,7 +44,7 @@ exports.updateStatus = async (req, res) => {
 };
 
 
-const acceptRide = async (req, res) => {
+exports.acceptRide = async (req, res) => {
   try {
     const io = req.app.get("io");
 
@@ -76,6 +76,3 @@ const acceptRide = async (req, res) => {
   }
 };
 
-module.exports = {
-  acceptRide
-};
