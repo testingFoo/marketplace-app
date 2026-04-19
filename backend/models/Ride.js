@@ -8,7 +8,7 @@ const RideSchema = new mongoose.Schema({
 
   originCoords: Object,
   destinationCoords: Object,
-
+{ timestamps: true },
   status: {
     type: String,
     default: "REQUESTED"
