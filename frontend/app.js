@@ -235,3 +235,13 @@ function updateETA(mins) {
 
   el.innerText = `Driver arriving in ${mins} min`;
 }
+
+
+window.onload = () => {
+  initMap();
+  initSocket();
+  setupSearch("origin");
+  setupSearch("destination");
+  loadRides();
+  loadDebug(); // 🔥 ADD THIS
+};
