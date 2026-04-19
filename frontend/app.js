@@ -123,7 +123,7 @@ function setupSearch(id) {
 }
 
 // ================= SUBMIT =================
-function submit() {
+function submitRide() {
   if (!origin || !destination) {
     alert("Select origin and destination");
     return;
