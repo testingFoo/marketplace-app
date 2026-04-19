@@ -1,3 +1,4 @@
+const { startDriverMovement } = require("../socket/driverMovement");
 const Ride = require("../models/Ride");
 const Driver = require("../models/Driver");
 const dispatch = require("../services/dispatch.service");
