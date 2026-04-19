@@ -42,3 +42,40 @@ exports.updateStatus = async (req, res) => {
 
   res.json(ride);
 };
+
+
+const acceptRide = async (req, res) => {
+  try {
+    const io = req.app.get("io");
+
+    const { id } = req.params;
+    const { driverId } = req.body;
+
+    const ride = await Ride.findByIdAndUpdate(
+      id,
+      {
+        driverId,
+        status: "ACCEPTED"
+      },
+      { new: true }
+    );
+
+    // 🚗 START STEP R MOVEMENT
+    if (ride && ride.originCoords && ride.destinationCoords) {
+      const routeCoords = ride.routeCoords || ride.originCoords; 
+      startDriverMovement(io, ride._id, routeCoords);
+    }
+
+    io.emit("ride:update", ride);
+
+    res.json(ride);
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+module.exports = {
+  acceptRide
+};
