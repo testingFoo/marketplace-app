@@ -6,6 +6,7 @@ let map;
 
 let origin = null;
 let destination = null;
+let driverMarker = null;
 
 let activeTab = "passenger";
 let driverId = "D-" + Math.floor(Math.random() * 99999);
@@ -27,28 +28,28 @@ function initSocket() {
 
   socket.on("ride:new", loadRides);
   socket.on("ride:update", loadRides);
+
+  // 🚗 STEP R LIVE MOVEMENT
   socket.on("driver-location-update", (data) => {
-  const { location, etaSeconds } = data;
+    const { location, etaSeconds } = data;
 
-  // create marker if not exists
-  if (!driverMarker) {
-    driverMarker = L.marker([location.lat, location.lng]).addTo(map);
-  } else {
-    driverMarker.setLatLng([location.lat, location.lng]);
-  }
+    if (!driverMarker) {
+      driverMarker = L.marker([location.lat, location.lng]).addTo(map);
+    } else {
+      driverMarker.setLatLng([location.lat, location.lng]);
+    }
 
-  // update ETA UI
-  updateETA(Math.round(etaSeconds / 60));
-});
-  
+    updateETA(Math.round(etaSeconds / 60));
+  });
 }
 
 // ================= MAP =================
 function initMap() {
   map = L.map("map").setView([50.06, 19.94], 13);
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png")
-    .addTo(map);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "OSM"
+  }).addTo(map);
 }
 
 // ================= TAB =================
@@ -58,11 +59,21 @@ function setTab(t) {
 
 // ================= MAPBOX SEARCH =================
 async function search(q) {
-  const res = await fetch(
-    `https://api.mapbox.com/geocoding/v5/mapbox.places/${q}.json?access_token=YOUR_TOKEN`
-  );
-  const data = await res.json();
-  return data.features || [];
+  try {
+    const res = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${MAPBOX_TOKEN}`
+    );
+
+    const data = await res.json();
+
+    if (!data.features) return [];
+
+    return data.features;
+
+  } catch (err) {
+    console.log("Mapbox error:", err);
+    return [];
+  }
 }
 
 // ================= AUTOCOMPLETE =================
@@ -70,37 +81,57 @@ function setupSearch(id) {
   const input = document.getElementById(id);
   const box = document.getElementById(id + "List");
 
-  input.addEventListener("input", async () => {
-    if (input.value.length < 3) return;
+  let timeout;
 
-    const res = await search(input.value);
-    box.innerHTML = "";
+  input.addEventListener("input", () => {
+    clearTimeout(timeout);
 
-    res.forEach(r => {
-      const div = document.createElement("div");
-      div.innerText = r.place_name;
-
-      div.onclick = () => {
-        input.value = r.place_name;
-
-        const c = { lng: r.center[0], lat: r.center[1] };
-
-        if (id === "origin") origin = c;
-        else destination = c;
-
+    timeout = setTimeout(async () => {
+      if (input.value.length < 3) {
         box.innerHTML = "";
-      };
+        return;
+      }
 
-      box.appendChild(div);
-    });
+      const res = await search(input.value);
+      box.innerHTML = "";
+
+      res.forEach(r => {
+        const div = document.createElement("div");
+        div.innerText = r.place_name;
+
+        div.onclick = () => {
+          input.value = r.place_name;
+
+          const c = {
+            lng: r.center[0],
+            lat: r.center[1]
+          };
+
+          if (id === "origin") origin = c;
+          else destination = c;
+
+          box.innerHTML = "";
+
+          L.marker([c.lat, c.lng]).addTo(map);
+        };
+
+        box.appendChild(div);
+      });
+
+    }, 300); // debounce
   });
 }
 
 // ================= SUBMIT =================
 function submit() {
+  if (!origin || !destination) {
+    alert("Select origin and destination");
+    return;
+  }
+
   fetch(`${API}/api/ride`, {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       type: activeTab.toUpperCase(),
       origin: document.getElementById("origin").value,
@@ -118,24 +149,32 @@ function loadRides() {
     .then(render);
 }
 
-// ================= RENDER DAT STYLE =================
+// ================= RENDER =================
 function render(rides) {
   const list = document.getElementById("list");
   list.innerHTML = "";
 
   rides.forEach(r => {
-
     list.innerHTML += `
       <div class="card">
         <b>${r.type}</b><br/>
         ${r.origin} → ${r.destination}<br/>
         Status: ${r.status}<br/>
         Driver: ${r.driverId || "OPEN"}<br/>
-
-        ${r.status === "REQUESTED"
-          ? `<button class="action">Available</button>`
-          : ""}
       </div>
     `;
   });
+}
+
+// ================= ETA =================
+function updateETA(mins) {
+  let el = document.getElementById("eta");
+
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "eta";
+    document.body.appendChild(el);
+  }
+
+  el.innerText = `Driver arriving in ${mins} min`;
 }
