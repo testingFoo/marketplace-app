@@ -76,3 +76,12 @@ exports.acceptRide = async (req, res) => {
   }
 };
 
+
+exports.getRides = async (req, res) => {
+  try {
+    const rides = await Ride.find().sort({ createdAt: -1 });
+    res.json(rides);
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+};
