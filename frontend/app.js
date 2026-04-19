@@ -27,6 +27,20 @@ function initSocket() {
 
   socket.on("ride:new", loadRides);
   socket.on("ride:update", loadRides);
+  socket.on("driver-location-update", (data) => {
+  const { location, etaSeconds } = data;
+
+  // create marker if not exists
+  if (!driverMarker) {
+    driverMarker = L.marker([location.lat, location.lng]).addTo(map);
+  } else {
+    driverMarker.setLatLng([location.lat, location.lng]);
+  }
+
+  // update ETA UI
+  updateETA(Math.round(etaSeconds / 60));
+});
+  
 }
 
 // ================= MAP =================
