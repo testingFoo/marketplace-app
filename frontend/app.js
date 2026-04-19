@@ -151,7 +151,7 @@ function loadRides() {
 
 // ================= RENDER =================
 function render(rides) {
-  const list = document.getElementById("list");
+  const list = document.getElementById("rides"); // FIXED
   list.innerHTML = "";
 
   rides.forEach(r => {
@@ -178,3 +178,6 @@ function updateETA(mins) {
 
   el.innerText = `Driver arriving in ${mins} min`;
 }
+
+window.submitRide = submitRide;
+window.setTab = setTab;
