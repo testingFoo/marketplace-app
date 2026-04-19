@@ -29,9 +29,10 @@ function initSocket() {
   socket.on("ride:new", loadRides);
   socket.on("ride:update", loadRides);
 
-  // 🚗 STEP R LIVE MOVEMENT
   socket.on("driver-location-update", (data) => {
     const { location, etaSeconds } = data;
+
+    if (!location) return;
 
     if (!driverMarker) {
       driverMarker = L.marker([location.lat, location.lng]).addTo(map);
@@ -39,7 +40,7 @@ function initSocket() {
       driverMarker.setLatLng([location.lat, location.lng]);
     }
 
-    updateETA(Math.round(etaSeconds / 60));
+    updateETA(Math.round((etaSeconds || 0) / 60));
   });
 }
 
@@ -55,6 +56,13 @@ function initMap() {
 // ================= TAB =================
 function setTab(t) {
   activeTab = t;
+
+  document.querySelectorAll(".section").forEach(el => {
+    el.classList.remove("active");
+  });
+
+  const active = document.getElementById(t);
+  if (active) active.classList.add("active");
 }
 
 // ================= MAPBOX SEARCH =================
@@ -65,10 +73,7 @@ async function search(q) {
     );
 
     const data = await res.json();
-
-    if (!data.features) return [];
-
-    return data.features;
+    return data.features || [];
 
   } catch (err) {
     console.log("Mapbox error:", err);
@@ -80,6 +85,8 @@ async function search(q) {
 function setupSearch(id) {
   const input = document.getElementById(id);
   const box = document.getElementById(id + "List");
+
+  if (!input || !box) return;
 
   let timeout;
 
@@ -118,11 +125,11 @@ function setupSearch(id) {
         box.appendChild(div);
       });
 
-    }, 300); // debounce
+    }, 300);
   });
 }
 
-// ================= SUBMIT =================
+// ================= SUBMIT RIDE =================
 function submitRide() {
   if (!origin || !destination) {
     alert("Select origin and destination");
@@ -139,27 +146,47 @@ function submitRide() {
       originCoords: origin,
       destinationCoords: destination
     })
-  });
+  })
+  .then(res => res.json())
+  .then(data => {
+    console.log("Ride created:", data);
+    loadRides();
+  })
+  .catch(err => console.log("Submit error:", err));
 }
 
-// ================= LOAD =================
+// expose for inline HTML onclick
+window.submitRide = submitRide;
+window.setTab = setTab;
+
+// ================= LOAD RIDES =================
 function loadRides() {
   fetch(`${API}/api/rides`)
     .then(r => r.json())
-    .then(render);
+    .then(data => {
+      if (!Array.isArray(data)) {
+        console.log("Invalid rides response:", data);
+        return;
+      }
+      render(data);
+    })
+    .catch(err => console.log("Load rides error:", err));
 }
 
 // ================= RENDER =================
 function render(rides) {
-  const list = document.getElementById("rides"); // FIXED
+  const list = document.getElementById("rides");
+
+  if (!list) return;
+
   list.innerHTML = "";
 
   rides.forEach(r => {
     list.innerHTML += `
       <div class="card">
-        <b>${r.type}</b><br/>
-        ${r.origin} → ${r.destination}<br/>
-        Status: ${r.status}<br/>
+        <b>${r.type || "UNKNOWN"}</b><br/>
+        ${r.origin || "-"} → ${r.destination || "-"}<br/>
+        Status: ${r.status || "-"}<br/>
         Driver: ${r.driverId || "OPEN"}<br/>
       </div>
     `;
@@ -173,11 +200,15 @@ function updateETA(mins) {
   if (!el) {
     el = document.createElement("div");
     el.id = "eta";
+    el.style.position = "fixed";
+    el.style.bottom = "10px";
+    el.style.right = "10px";
+    el.style.background = "black";
+    el.style.color = "white";
+    el.style.padding = "10px";
+    el.style.zIndex = "9999";
     document.body.appendChild(el);
   }
 
   el.innerText = `Driver arriving in ${mins} min`;
 }
-
-window.submitRide = submitRide;
-window.setTab = setTab;
