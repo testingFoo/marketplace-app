@@ -86,6 +86,17 @@ async function acceptRide(id) {
   }
 }
 
+let map;
+
+function initMap() {
+  map = L.map("map").setView([50.06, 19.94], 13);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "OSM"
+  }).addTo(map);
+}
+
+
 // ================= TOGGLE ONLINE =================
 function toggleOnline() {
   online = !online;
@@ -104,3 +115,7 @@ function toggleOnline() {
 // expose to HTML buttons
 window.toggleOnline = toggleOnline;
 window.acceptRide = acceptRide;
+window.onload = () => {
+  initMap();
+  loadJobs();
+};
