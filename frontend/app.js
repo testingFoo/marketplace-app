@@ -193,6 +193,29 @@ function render(rides) {
   });
 }
 
+async function loadDebug() {
+  const panel = document.getElementById("debugPanel");
+
+  try {
+    const [db, server] = await Promise.all([
+      fetch(`${API}/api/debug/db`).then(r => r.json()).catch(e => ({ error: e.message })),
+      fetch(`${API}/api/debug`).then(r => r.json()).catch(e => ({ error: e.message }))
+    ]);
+
+    panel.innerHTML = `
+      🟢 Server: ${server.server || "down"}<br/>
+      🔌 Socket Clients: ${server.socketClients || 0}<br/><br/>
+
+      🟡 MongoDB: ${db.status || "unknown"}<br/>
+      ${db.name ? "DB: " + db.name + "<br/>" : ""}
+      ${db.error ? "Error: " + db.error : ""}
+    `;
+  } catch (err) {
+    panel.innerHTML = "❌ Backend unreachable";
+  }
+}
+
+
 // ================= ETA =================
 function updateETA(mins) {
   let el = document.getElementById("eta");
