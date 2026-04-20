@@ -29,20 +29,28 @@ exports.createRide = async (req, res) => {
 
     console.log("REQ BODY:", req.body);
 
+    console.log("TYPE:", req.body.type);
+    console.log("ORIGIN:", req.body.originCoords);
+    console.log("DEST:", req.body.destinationCoords);
+
+    // ✅ NORMALIZE COORDS (THIS FIXES YOUR CRASH)
+    const originCoords = req.body.originCoords;
+
+    const normalizedOrigin = Array.isArray(originCoords)
+      ? { lng: originCoords[0], lat: originCoords[1] }
+      : originCoords;
+
     let driver = null;
 
     try {
       driver = await dispatch.findDriver(
         req.body.type,
-        req.body.originCoords
+        normalizedOrigin
       );
     } catch (e) {
       console.log("Dispatch error:", e);
     }
-    
-    console.log("TYPE:", req.body.type);
-    console.log("ORIGIN:", req.body.originCoords);
-    console.log("DEST:", req.body.destinationCoords);
+
     const ride = await Ride.create({
       ...req.body,
       status: driver ? "ACCEPTED" : "REQUESTED",
@@ -63,6 +71,7 @@ exports.createRide = async (req, res) => {
   } catch (err) {
     console.error("🔥 createRide FULL ERROR:", err);
     console.error("STACK:", err?.stack);
+
     res.status(500).json({ error: "Server error" });
   }
 };
@@ -88,7 +97,6 @@ exports.acceptRide = async (req, res) => {
 
     let coords = null;
 
-    // SAFE COORD CHECK
     if (
       ride.originCoords?.lng != null &&
       ride.originCoords?.lat != null &&
@@ -101,7 +109,6 @@ exports.acceptRide = async (req, res) => {
       );
     }
 
-    // SAFE FALLBACK
     if (!coords) {
       coords = [
         [
