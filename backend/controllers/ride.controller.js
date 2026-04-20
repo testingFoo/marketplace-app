@@ -2,6 +2,16 @@ const { startDriverMovement } = require("../sockets/driverMovement");
 const Ride = require("../models/Ride");
 const Driver = require("../models/Driver");
 const dispatch = require("../services/dispatch.service");
+const fetch = require("node-fetch");
+
+async function getRoute(origin, destination) {
+  const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?geometries=geojson&access_token=${process.env.MAPBOX_TOKEN}`;
+
+  const res = await fetch(url);
+  const data = await res.json();
+
+  return data.routes[0].geometry.coordinates;
+}
 
 exports.acceptRide = async (req, res) => {
   try {
@@ -23,11 +33,10 @@ exports.acceptRide = async (req, res) => {
     const io = req.app.get("io");
 
     if (ride.originCoords && ride.destinationCoords) {
-      const coords = [
-        [ride.originCoords.lng, ride.originCoords.lat],
-        [ride.destinationCoords.lng, ride.destinationCoords.lat]
-      ];
-
+     const coords = await getRoute(
+  ride.originCoords,
+  ride.destinationCoords
+);
       startDriverMovement(io, ride._id, coords);
     }
 
