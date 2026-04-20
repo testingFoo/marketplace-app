@@ -2,7 +2,6 @@ const Ride = require("../models/Ride");
 const Driver = require("../models/Driver");
 const dispatch = require("../services/dispatch.service");
 const { startDriverMovement } = require("../sockets/driverMovement");
-const fetch = require("node-fetch");
 
 // ================= GET MAPBOX ROUTE =================
 async function getRoute(origin, destination) {
