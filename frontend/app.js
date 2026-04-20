@@ -139,19 +139,41 @@ function submitRide() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      type: activeTab.toUpperCase(),
-     
-      originCoords: origin,
-      destinationCoords: destination
+      userId: "demo-user",
+
+      type:
+        activeTab === "passenger"
+          ? "UBERX"
+          : activeTab === "parcel"
+            ? "VAN"
+            : "FREIGHT",
+
+      originCoords: {
+        lng: origin.lng,
+        lat: origin.lat
+      },
+
+      destinationCoords: {
+        lng: destination.lng,
+        lat: destination.lat
+      }
     })
   })
-  .then(res => res.json())
-  .then(data => {
-    console.log("Ride created:", data);
-    loadRides();
-  })
-  .catch(err => console.log("Submit error:", err));
+    .then(async (res) => {
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.log("❌ Backend error:", data);
+        alert(data.error || "Server error");
+        return;
+      }
+
+      console.log("✅ Ride created:", data);
+      loadRides();
+    })
+    .catch(err => console.log("Submit error:", err));
 }
+
 
 window.submitRide = submitRide;
 window.setTab = setTab;
