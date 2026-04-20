@@ -8,45 +8,60 @@ function startDriverMovement(io, rideId, coords) {
   const total = coords.length;
 
   const interval = setInterval(async () => {
-    const ride = await Ride.findById(rideId);
+    try {
+      const ride = await Ride.findById(rideId);
 
-    if (!ride || ride.status === "COMPLETED") {
-      clearInterval(interval);
-      return;
-    }
+      if (!ride || ride.status === "COMPLETED") {
+        clearInterval(interval);
+        return;
+      }
 
-    const [lng, lat] = coords[index];
+      const [lng, lat] = coords[index];
 
-    // 🔥 BETTER ETA (distance-based approximation)
-    const remainingRatio = (total - index) / total;
-    const etaSeconds = Math.round(remainingRatio * 300); // ~5 min trip
+      // 🔥 UPDATE DRIVER LOCATION IN DB
+      if (ride.driverId) {
+        await Driver.findByIdAndUpdate(ride.driverId, {
+          location: { lat, lng }
+        });
+      }
 
-    io.emit("driver-location-update", {
-      rideId,
-      location: { lat, lng },
-      progress: index / total,
-      etaSeconds
-    });
+      // ETA calculation
+      const remainingRatio = (total - index) / total;
+      const etaSeconds = Math.round(remainingRatio * 300);
 
-    index++;
-
-    if (index >= total) {
-      await Ride.findByIdAndUpdate(rideId, {
-        status: "COMPLETED"
+      io.emit("driver-location-update", {
+        rideId,
+        location: { lat, lng },
+        progress: index / total,
+        etaSeconds
       });
 
-      io.emit("ride-completed", { rideId });
+      index++;
 
+      if (index >= total) {
+        await Ride.findByIdAndUpdate(rideId, {
+          status: "COMPLETED"
+        });
+
+        // 🔥 FREE DRIVER AGAIN
+        if (ride.driverId) {
+          await Driver.findByIdAndUpdate(ride.driverId, {
+            status: "IDLE",
+            available: true
+          });
+        }
+
+        io.emit("ride-completed", { rideId });
+
+        clearInterval(interval);
+      }
+
+    } catch (err) {
+      console.log("Movement error:", err);
       clearInterval(interval);
     }
 
-  }, 100); // 🔥 smoother: 10 updates per second
-  
+  }, 300); // slower = more stable
 }
-
-await Driver.findByIdAndUpdate(ride.driverId, {
-  location: { lat, lng }
-});
-
 
 module.exports = { startDriverMovement };
