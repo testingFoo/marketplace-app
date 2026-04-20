@@ -11,14 +11,6 @@ let driverMarker = null;
 let activeTab = "passenger";
 let driverId = "D-" + Math.floor(Math.random() * 99999);
 
-// ================= INIT =================
-window.onload = () => {
-  initMap();
-  initSocket();
-  setupSearch("origin");
-  setupSearch("destination");
-  loadRides();
-};
 
 // ================= SOCKET =================
 function initSocket() {
@@ -243,5 +235,5 @@ window.onload = () => {
   setupSearch("origin");
   setupSearch("destination");
   loadRides();
-  loadDebug(); // 🔥 ADD THIS
+  loadDebug();
 };
