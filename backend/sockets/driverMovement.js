@@ -16,22 +16,19 @@ function startDriverMovement(io, rideId, coords) {
 
     const [lng, lat] = coords[index];
 
-    const remaining = total - index;
+    // 🔥 BETTER ETA (distance-based approximation)
+    const remainingRatio = (total - index) / total;
+    const etaSeconds = Math.round(remainingRatio * 300); // ~5 min trip
 
-    const etaSeconds = remaining * 2; // simple model
-
-    // 🔥 REAL-TIME UPDATE
     io.emit("driver-location-update", {
       rideId,
       location: { lat, lng },
-      index,
-      total,
+      progress: index / total,
       etaSeconds
     });
 
     index++;
 
-    // AUTO COMPLETE
     if (index >= total) {
       await Ride.findByIdAndUpdate(rideId, {
         status: "COMPLETED"
@@ -42,7 +39,7 @@ function startDriverMovement(io, rideId, coords) {
       clearInterval(interval);
     }
 
-  }, 1000); // 1 step per second (smooth simulation)
+  }, 100); // 🔥 smoother: 10 updates per second
 }
 
 module.exports = { startDriverMovement };
