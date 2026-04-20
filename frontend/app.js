@@ -140,8 +140,7 @@ function submitRide() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       type: activeTab.toUpperCase(),
-      origin: document.getElementById("origin").value,
-      destination: document.getElementById("destination").value,
+     
       originCoords: origin,
       destinationCoords: destination
     })
