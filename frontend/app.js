@@ -1,5 +1,5 @@
 const API = "https://marketplace-app-m8ac.onrender.com";
-const MAPBOX_TOKEN = "pk.eyJ1IjoibWFwZnVycWFuIiwiYSI6ImNtbzRoMGdnbjEzZXkydnF3MWFhN2t5aWcifQ.A7GlM3WDlLWHBl6lQCHKEA";
+const MAPBOX_TOKEN = "YOUR_MAPBOX_TOKEN";
 
 let socket;
 let map;
@@ -9,14 +9,14 @@ let destination = null;
 let driverMarker = null;
 
 let activeTab = "passenger";
-let driverId = "D-" + Math.floor(Math.random() * 99999);
-
 
 // ================= SOCKET =================
 function initSocket() {
   socket = io(API);
 
-  socket.emit("driver:online", driverId);
+  socket.on("connect", () => {
+    console.log("Connected to server");
+  });
 
   socket.on("ride:new", loadRides);
   socket.on("ride:update", loadRides);
@@ -33,6 +33,14 @@ function initSocket() {
     }
 
     updateETA(Math.round((etaSeconds || 0) / 60));
+  });
+
+  socket.on("ride-completed", () => {
+    alert("Ride completed ✅");
+    if (driverMarker) {
+      map.removeLayer(driverMarker);
+      driverMarker = null;
+    }
   });
 }
 
@@ -66,7 +74,6 @@ async function search(q) {
 
     const data = await res.json();
     return data.features || [];
-
   } catch (err) {
     console.log("Mapbox error:", err);
     return [];
@@ -147,7 +154,6 @@ function submitRide() {
   .catch(err => console.log("Submit error:", err));
 }
 
-// expose for inline HTML onclick
 window.submitRide = submitRide;
 window.setTab = setTab;
 
@@ -156,10 +162,7 @@ function loadRides() {
   fetch(`${API}/api/rides`)
     .then(r => r.json())
     .then(data => {
-      if (!Array.isArray(data)) {
-        console.log("Invalid rides response:", data);
-        return;
-      }
+      if (!Array.isArray(data)) return;
       render(data);
     })
     .catch(err => console.log("Load rides error:", err));
@@ -168,7 +171,6 @@ function loadRides() {
 // ================= RENDER =================
 function render(rides) {
   const list = document.getElementById("rides");
-
   if (!list) return;
 
   list.innerHTML = "";
@@ -180,33 +182,11 @@ function render(rides) {
         ${r.origin || "-"} → ${r.destination || "-"}<br/>
         Status: ${r.status || "-"}<br/>
         Driver: ${r.driverId || "OPEN"}<br/>
+        Fare: $${r.fare || 0}
       </div>
     `;
   });
 }
-
-async function loadDebug() {
-  const panel = document.getElementById("debugPanel");
-
-  try {
-    const [db, server] = await Promise.all([
-      fetch(`${API}/api/debug/db`).then(r => r.json()).catch(e => ({ error: e.message })),
-      fetch(`${API}/api/debug`).then(r => r.json()).catch(e => ({ error: e.message }))
-    ]);
-
-    panel.innerHTML = `
-      🟢 Server: ${server.server || "down"}<br/>
-      🔌 Socket Clients: ${server.socketClients || 0}<br/><br/>
-
-      🟡 MongoDB: ${db.status || "unknown"}<br/>
-      ${db.name ? "DB: " + db.name + "<br/>" : ""}
-      ${db.error ? "Error: " + db.error : ""}
-    `;
-  } catch (err) {
-    panel.innerHTML = "❌ Backend unreachable";
-  }
-}
-
 
 // ================= ETA =================
 function updateETA(mins) {
@@ -228,12 +208,11 @@ function updateETA(mins) {
   el.innerText = `Driver arriving in ${mins} min`;
 }
 
-
+// ================= INIT =================
 window.onload = () => {
   initMap();
   initSocket();
   setupSearch("origin");
   setupSearch("destination");
   loadRides();
-  loadDebug();
 };
