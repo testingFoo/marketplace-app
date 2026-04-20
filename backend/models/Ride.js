@@ -1,31 +1,42 @@
 const mongoose = require("mongoose");
 
-const RideSchema = new mongoose.Schema({
-  type: String, // PASSENGER | PARCEL | FREIGHT
+const DriverSchema = new mongoose.Schema({
+  userId: String,
+  name: String,
 
-  origin: String,
-  destination: String,
-
-  originCoords: Object,
-  destinationCoords: Object,
-
-  status: {
+  // vehicle capability
+  vehicleType: {
     type: String,
-    default: "REQUESTED"
+    enum: ["UBERX", "VAN", "FREIGHT"],
+    required: true
   },
 
-  riderId: String,
-  driverId: String,
+  car: String,
+  plate: String,
 
-  fare: Number,
+  rating: { type: Number, default: 4.8 },
+  completedTrips: { type: Number, default: 500 },
 
-  // freight fields
-  equipment: String,
-  weight: String,
-  distance: Number,
-  rate: Number
-}, {
-  timestamps: true   // ✅ ADD THIS
+  // 🔥 CORE UPGRADE #1: LOCATION
+  location: {
+    lat: Number,
+    lng: Number
+  },
+
+  // 🔥 CORE UPGRADE #2: DRIVER STATE
+  status: {
+    type: String,
+    enum: ["OFFLINE", "ONLINE", "IDLE", "EN_ROUTE", "ON_TRIP"],
+    default: "OFFLINE"
+  },
+
+  // 🔥 CORE UPGRADE #3: REAL-TIME TRACKING
+  lastSeen: {
+    type: Date,
+    default: Date.now
+  },
+
+  available: { type: Boolean, default: true }
 });
 
-module.exports = mongoose.model("Ride", RideSchema);
+module.exports = mongoose.model("Driver", DriverSchema);
