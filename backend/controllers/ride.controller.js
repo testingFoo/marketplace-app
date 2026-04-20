@@ -27,16 +27,18 @@ async function getRoute(origin, destination) {
 exports.createRide = async (req, res) => {
   try {
 
-let driver = null;
+    console.log("REQ BODY:", req.body);
 
-try {
-  driver = await dispatch.findDriver(
-    req.body.type,
-    req.body.originCoords
-  );
-} catch (e) {
-  console.log("Dispatch error:", e);
-}
+    let driver = null;
+
+    try {
+      driver = await dispatch.findDriver(
+        req.body.type,
+        req.body.originCoords
+      );
+    } catch (e) {
+      console.log("Dispatch error:", e);
+    }
 
     const ride = await Ride.create({
       ...req.body,
@@ -61,7 +63,7 @@ try {
   }
 };
 
-// ================= ACCEPT RIDE (🔥 FINAL VERSION) =================
+// ================= ACCEPT RIDE =================
 exports.acceptRide = async (req, res) => {
   try {
     const { driverId } = req.body;
@@ -80,25 +82,35 @@ exports.acceptRide = async (req, res) => {
 
     const io = req.app.get("io");
 
-    // 🔥 GET REAL ROUTE FROM MAPBOX
     let coords = null;
 
-    if (ride.originCoords && ride.destinationCoords) {
+    // SAFE COORD CHECK
+    if (
+      ride.originCoords?.lng != null &&
+      ride.originCoords?.lat != null &&
+      ride.destinationCoords?.lng != null &&
+      ride.destinationCoords?.lat != null
+    ) {
       coords = await getRoute(
         ride.originCoords,
         ride.destinationCoords
       );
     }
 
-    // fallback (if API fails)
+    // SAFE FALLBACK
     if (!coords) {
       coords = [
-        [ride.originCoords.lng, ride.originCoords.lat],
-        [ride.destinationCoords.lng, ride.destinationCoords.lat]
+        [
+          ride.originCoords?.lng || 0,
+          ride.originCoords?.lat || 0
+        ],
+        [
+          ride.destinationCoords?.lng || 0,
+          ride.destinationCoords?.lat || 0
+        ]
       ];
     }
 
-    // 🚗 START MOVEMENT
     startDriverMovement(io, ride._id, coords);
 
     if (io) io.emit("ride:update", ride);
