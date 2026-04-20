@@ -1,4 +1,5 @@
 const Ride = require("../models/Ride");
+const Driver = require("../models/Driver");
 
 function startDriverMovement(io, rideId, coords) {
   if (!coords || coords.length === 0) return;
@@ -40,6 +41,12 @@ function startDriverMovement(io, rideId, coords) {
     }
 
   }, 100); // 🔥 smoother: 10 updates per second
+  
 }
+
+await Driver.findByIdAndUpdate(ride.driverId, {
+  location: { lat, lng }
+});
+
 
 module.exports = { startDriverMovement };
