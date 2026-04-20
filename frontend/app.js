@@ -1,5 +1,5 @@
 const API = "https://marketplace-app-m8ac.onrender.com";
-const MAPBOX_TOKEN = "YOUR_MAPBOX_TOKEN";
+const MAPBOX_TOKEN = "pk.eyJ1IjoibWFwZnVycWFuIiwiYSI6ImNtbzRoMGdnbjEzZXkydnF3MWFhN2t5aWcifQ.A7GlM3WDlLWHBl6lQCHKEA";
 
 let socket;
 let map;
