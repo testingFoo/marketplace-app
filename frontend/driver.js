@@ -9,14 +9,12 @@ if (!driverId) {
 }
 
 let online = false;
+let map;
 
 // ================= INIT =================
 window.onload = () => {
-  document.getElementById("profile").innerHTML = `
-    <b>Driver ID:</b> ${driverId}<br/>
-    <b>Status:</b> ${online ? "Online" : "Offline"}
-  `;
-
+  initMap();
+  updateProfile();
   loadJobs();
 };
 
@@ -25,13 +23,25 @@ socket.on("connect", () => {
   console.log("Driver connected:", socket.id);
 });
 
-socket.on("ride:new", () => {
-  loadJobs();
-});
+socket.on("ride:new", loadJobs);
+socket.on("ride:update", loadJobs);
 
-socket.on("ride:update", () => {
-  loadJobs();
-});
+// ================= PROFILE =================
+function updateProfile() {
+  document.getElementById("profile").innerHTML = `
+    <b>Driver ID:</b> ${driverId}<br/>
+    <b>Status:</b> ${online ? "Online 🟢" : "Offline 🔴"}
+  `;
+}
+
+// ================= MAP =================
+function initMap() {
+  map = L.map("map").setView([50.06, 19.94], 13);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "OSM"
+  }).addTo(map);
+}
 
 // ================= LOAD JOBS =================
 async function loadJobs() {
@@ -86,36 +96,21 @@ async function acceptRide(id) {
   }
 }
 
-let map;
-
-function initMap() {
-  map = L.map("map").setView([50.06, 19.94], 13);
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "OSM"
-  }).addTo(map);
-}
-
-
 // ================= TOGGLE ONLINE =================
 function toggleOnline() {
   online = !online;
 
-  document.getElementById("profile").innerHTML = `
-    <b>Driver ID:</b> ${driverId}<br/>
-    <b>Status:</b> ${online ? "Online 🟢" : "Offline 🔴"}
-  `;
+  const status = online ? "IDLE" : "OFFLINE";
 
+  updateProfile();
+
+  // 🔥 FIX: send status (not boolean)
   socket.emit("driver:status", {
     driverId,
-    online
+    status
   });
 }
 
-// expose to HTML buttons
+// expose
 window.toggleOnline = toggleOnline;
 window.acceptRide = acceptRide;
-window.onload = () => {
-  initMap();
-  loadJobs();
-};
