@@ -15,13 +15,11 @@ const DriverSchema = new mongoose.Schema({
   rating: { type: Number, default: 4.8 },
   completedTrips: { type: Number, default: 500 },
 
-  // 🔥 NEW: DRIVER LOCATION
   location: {
     lat: { type: Number, default: 0 },
     lng: { type: Number, default: 0 }
   },
 
-  // 🔥 NEW: DRIVER STATE
   status: {
     type: String,
     enum: ["OFFLINE", "ONLINE", "IDLE", "EN_ROUTE", "ON_TRIP"],
@@ -31,4 +29,5 @@ const DriverSchema = new mongoose.Schema({
   available: { type: Boolean, default: true }
 });
 
-module.exports = mongoose.model("Driver", DriverSchema);
+// 🔥 FIX: prevent overwrite error
+module.exports = mongoose.models.Driver || mongoose.model("Driver", DriverSchema);
