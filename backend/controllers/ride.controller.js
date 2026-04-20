@@ -3,30 +3,40 @@ const Ride = require("../models/Ride");
 const Driver = require("../models/Driver");
 const dispatch = require("../services/dispatch.service");
 
-exports.createRide = async (req, res) => {
+exports.acceptRide = async (req, res) => {
   try {
-    const io = req.app.get("io");
+    const { driverId } = req.body;
+    const rideId = req.params.id;
 
-    const driver = await dispatch.findDriver(req.body.type);
+    const ride = await Ride.findById(rideId);
 
-    const ride = await Ride.create({
-      ...req.body,
-      status: driver ? "ACCEPTED" : "REQUESTED",
-      driverId: driver ? driver._id : null,
-      fare: Math.floor(Math.random() * 30) + 10
-    });
-
-    if (driver) {
-      driver.available = false;
-      await driver.save();
+    if (!ride) {
+      return res.status(404).json({ error: "Ride not found" });
     }
 
-    if (io) io.emit("ride:new", ride);
+    ride.status = "ACCEPTED";
+    ride.driverId = driverId;
+
+    await ride.save();
+
+    // 🔥 THIS IS WHAT YOU WERE MISSING
+    const io = req.app.get("io");
+
+    if (ride.originCoords && ride.destinationCoords) {
+      const coords = [
+        [ride.originCoords.lng, ride.originCoords.lat],
+        [ride.destinationCoords.lng, ride.destinationCoords.lat]
+      ];
+
+      startDriverMovement(io, ride._id, coords);
+    }
+
+    io.emit("ride:update", ride);
 
     res.json(ride);
 
   } catch (err) {
-    console.log("createRide error:", err);
+    console.log("Accept error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
