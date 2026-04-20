@@ -39,7 +39,10 @@ exports.createRide = async (req, res) => {
     } catch (e) {
       console.log("Dispatch error:", e);
     }
-
+    
+    console.log("TYPE:", req.body.type);
+    console.log("ORIGIN:", req.body.originCoords);
+    console.log("DEST:", req.body.destinationCoords);
     const ride = await Ride.create({
       ...req.body,
       status: driver ? "ACCEPTED" : "REQUESTED",
@@ -58,7 +61,8 @@ exports.createRide = async (req, res) => {
     res.json(ride);
 
   } catch (err) {
-    console.log("createRide error:", err);
+    console.error("🔥 createRide FULL ERROR:", err);
+    console.error("STACK:", err?.stack);
     res.status(500).json({ error: "Server error" });
   }
 };
