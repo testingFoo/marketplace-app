@@ -26,10 +26,17 @@ async function getRoute(origin, destination) {
 // ================= CREATE RIDE =================
 exports.createRide = async (req, res) => {
   try {
-  const driver = await dispatch.findDriver(
-  req.body.type,
-  req.body.originCoords
-);
+
+let driver = null;
+
+try {
+  driver = await dispatch.findDriver(
+    req.body.type,
+    req.body.originCoords
+  );
+} catch (e) {
+  console.log("Dispatch error:", e);
+}
 
     const ride = await Ride.create({
       ...req.body,
