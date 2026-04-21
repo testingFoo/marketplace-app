@@ -4,7 +4,6 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const { Server } = require("socket.io");
 
-
 const rideRoutes = require("./routes/ride.routes");
 const authRoutes = require("./routes/auth.routes");
 const driverRoutes = require("./routes/driver.routes");
@@ -15,7 +14,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔥 REQUEST LOGGER (VERY IMPORTANT)
+// 🔥 REQUEST LOGGER
 app.use((req, res, next) => {
   console.log(`➡️ ${req.method} ${req.url}`);
   next();
@@ -26,22 +25,21 @@ app.use("/api/rides", rideRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/driver", driverRoutes);
 
-// ================= HTTP + SOCKET =================
+// ================= HTTP SERVER =================
 const server = http.createServer(app);
 
+// ================= SOCKET.IO =================
 const io = new Server(server, {
   cors: { origin: "*" }
 });
 
+// 🔥 attach io to express (CRITICAL)
 app.set("io", io);
 
-// ================= LOAD SOCKET HANDLERS =================
-// 🔥 THIS IS THE LINE YOU WERE MISSING / UNCLEAR ABOUT
+// ================= SOCKET EVENTS =================
 require("./sockets")(io);
 
-
-
-// ================= SOCKET CORE=================
+// (optional direct connection log - keep both is fine)
 io.on("connection", (socket) => {
   console.log("🟢 Client connected:", socket.id);
 
@@ -50,15 +48,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// ================= DEBUG ENDPOINT (FRONTEND USE) =================
-app.get("/api/debug", (req, res) => {
-  res.json({
-    server: "running",
-    socketClients: io.engine.clientsCount
-  });
-});
-
-// ================= DB CONNECTION =================
+// ================= DB =================
 mongoose.set("debug", true);
 
 mongoose.connect(process.env.MONGO_URL)
