@@ -81,7 +81,9 @@ async function loadJobs() {
     jobsDiv.innerHTML = "";
 
     rides
-      .filter(r => r.status === "REQUESTED")
+      .filter(r => 
+             r.status === "REQUESTED" ||
+    r.status === "DRIVER_ARRIVING")
       .forEach(r => {
         const div = document.createElement("div");
         div.className = "card";
