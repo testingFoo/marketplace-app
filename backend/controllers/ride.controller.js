@@ -1,9 +1,7 @@
 const Ride = require("../models/Ride");
 const Driver = require("../models/Driver");
 const dispatch = require("../services/dispatch.service");
-
-// ✅ IMPORTANT: import ONCE here
-const { startDriverMovement } = require("../sockets/driverMovement");
+const { startDriverMovement } = require("../services/driverMovement");
 
 // ================= GET MAPBOX ROUTE =================
 async function getRoute(origin, destination) {
