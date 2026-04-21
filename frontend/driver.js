@@ -10,7 +10,7 @@ let map;
 // ================= INIT =================
 window.onload = async () => {
   initMap();
-  await ensureDriverExists(); // 🔥 IMPORTANT
+  await ensureDriverExists();
   updateProfile();
   loadJobs();
 };
@@ -23,7 +23,7 @@ socket.on("connect", () => {
 socket.on("ride:new", loadJobs);
 socket.on("ride:update", loadJobs);
 
-// ================= CREATE / GET DRIVER =================
+// ================= DRIVER INIT =================
 async function ensureDriverExists() {
   try {
     if (!driverId) {
@@ -31,7 +31,6 @@ async function ensureDriverExists() {
       localStorage.setItem("driverId", driverId);
     }
 
-    // 🔥 CALL BACKEND TO CREATE DRIVER
     const res = await fetch(`${API}/api/driver/init`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -81,9 +80,17 @@ async function loadJobs() {
     jobsDiv.innerHTML = "";
 
     rides
-      .filter(r => 
-             r.status === "REQUESTED" ||
-    r.status === "DRIVER_ARRIVING")
+      .filter(r => {
+        // 🔥 FINAL CLEAN LOGIC
+
+        // show new rides
+        if (r.status === "REQUESTED") return true;
+
+        // show rides already assigned to this driver
+        if (r.driverId && driverMongoId && r.driverId === driverMongoId) return true;
+
+        return false;
+      })
       .forEach(r => {
         const div = document.createElement("div");
         div.className = "card";
@@ -93,7 +100,11 @@ async function loadJobs() {
           Status: ${r.status}<br/>
           Fare: $${r.fare || 0}<br/>
 
-          <button onclick="acceptRide('${r._id}')">ACCEPT</button>
+          ${
+            r.status === "REQUESTED"
+              ? `<button onclick="acceptRide('${r._id}')">ACCEPT</button>`
+              : `<b>YOUR RIDE</b>`
+          }
         `;
 
         jobsDiv.appendChild(div);
@@ -116,7 +127,7 @@ async function acceptRide(id) {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        driverId: driverMongoId // 🔥 FIXED
+        driverId: driverMongoId
       })
     });
 
@@ -137,17 +148,15 @@ async function acceptRide(id) {
   }
 }
 
-// ================= TOGGLE ONLINE =================
+// ================= ONLINE TOGGLE =================
 function toggleOnline() {
   online = !online;
-
-  const status = online ? "IDLE" : "OFFLINE";
 
   updateProfile();
 
   socket.emit("driver:status", {
     driverId,
-    status
+    status: online ? "IDLE" : "OFFLINE"
   });
 }
 
