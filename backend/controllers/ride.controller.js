@@ -116,13 +116,16 @@ exports.acceptRide = async (req, res) => {
 
     let coords = await getRoute(ride.originCoords, ride.destinationCoords);
 
-    if (!coords) {
-      coords = [
-        [ride.originCoords.lng, ride.originCoords.lat],
-        [ride.destinationCoords.lng, ride.destinationCoords.lat]
-      ];
-    }
+    if (!coords || coords.length < 2) {
+  console.log("⚠️ NO ROUTE → USING STRAIGHT LINE");
 
+  coords = [
+    [ride.originCoords.lng, ride.originCoords.lat],
+    [ride.destinationCoords.lng, ride.destinationCoords.lat]
+  ];
+}
+
+console.log("✅ ROUTE LENGTH:", coords.length);
     ride.routeCoords = coords;
     await ride.save();
 
