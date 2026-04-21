@@ -3,7 +3,7 @@ const Driver = require("../models/Driver");
 
 // ================= RANDOM START =================
 function randomNear(coord) {
-  const offset = () => (Math.random() - 0.5) * 0.03; // ~3km
+  const offset = () => (Math.random() - 0.5) * 0.03;
 
   return {
     lat: coord.lat + offset(),
@@ -15,19 +15,19 @@ function interpolate(a, b, t) {
   return a + (b - a) * t;
 }
 
-// ================= MAIN =================
+// ================= MAIN DRIVER SIM =================
 function startDriverMovement(io, rideId, routeCoords) {
-  if (!routeCoords || routeCoords.length < 2) return;
+  if (!routeCoords || routeCoords.length < 2) {
+    console.log("❌ No routeCoords");
+    return;
+  }
 
   let index = 0;
   let progress = 0;
-
   let lastDbUpdate = Date.now();
   const stepSpeed = 0.02;
-
   let phase = "TO_PICKUP";
 
-  // 🔥 START RANDOMLY NEAR PICKUP
   let current = randomNear({
     lat: routeCoords[0][1],
     lng: routeCoords[0][0]
@@ -40,7 +40,7 @@ function startDriverMovement(io, rideId, routeCoords) {
 
       let target;
 
-      // ================= PHASE 1: GO TO PICKUP =================
+      // ================= TO PICKUP =================
       if (phase === "TO_PICKUP") {
         target = {
           lat: routeCoords[0][1],
@@ -54,7 +54,6 @@ function startDriverMovement(io, rideId, routeCoords) {
           Math.abs(current.lat - target.lat) +
           Math.abs(current.lng - target.lng);
 
-        // 🔥 ARRIVED AT PICKUP
         if (dist < 0.0003) {
           ride.status = "IN_PROGRESS";
           await ride.save();
@@ -67,15 +66,14 @@ function startDriverMovement(io, rideId, routeCoords) {
         }
       }
 
-      // ================= PHASE 2: TRIP =================
+      // ================= TRIP =================
       else {
         const start = routeCoords[index];
         const end = routeCoords[index + 1];
 
         if (!start || !end) {
-          await Ride.findByIdAndUpdate(rideId, {
-            status: "COMPLETED"
-          });
+          ride.status = "COMPLETED";
+          await ride.save();
 
           io.emit("ride-completed", { rideId });
           clearInterval(interval);
@@ -94,43 +92,29 @@ function startDriverMovement(io, rideId, routeCoords) {
       }
 
       // ================= DB UPDATE =================
-      const now = Date.now();
-
-      if (now - lastDbUpdate > 1000 && ride.driverId) {
+      if (Date.now() - lastDbUpdate > 1000 && ride.driverId) {
         await Driver.findByIdAndUpdate(ride.driverId, {
-          location: {
-            lat: current.lat,
-            lng: current.lng
-          }
+          location: current
         });
 
-        lastDbUpdate = now;
+        lastDbUpdate = Date.now();
       }
 
-      // ================= ETA =================
-      const remainingRatio =
-        phase === "TO_PICKUP"
-          ? 1
-          : (routeCoords.length - index) / routeCoords.length;
-
-      const etaSeconds = Math.round(remainingRatio * 300);
-
       // ================= SOCKET =================
+      const etaSeconds = Math.round((routeCoords.length - index) * 15);
+
       io.emit("driver-location-update", {
         rideId,
-        location: {
-          lat: current.lat,
-          lng: current.lng
-        },
+        location: current,
         etaSeconds,
         phase
       });
 
     } catch (err) {
-      console.log("Movement error:", err);
+      console.log("❌ Movement error:", err);
       clearInterval(interval);
     }
-  }, 80);
+  }, 1000);
 }
 
 module.exports = { startDriverMovement };
