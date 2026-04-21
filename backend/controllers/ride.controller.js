@@ -2,10 +2,13 @@ const Ride = require("../models/Ride");
 const Driver = require("../models/Driver");
 const dispatch = require("../services/dispatch.service");
 const { startDriverMovement } = require("../sockets/driverMovement");
+const fetch = require("node-fetch"); // ✅ FIX
 
 // ================= GET MAPBOX ROUTE =================
 async function getRoute(origin, destination) {
   try {
+    if (!origin || !destination) return null;
+
     const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?geometries=geojson&access_token=${process.env.MAPBOX_TOKEN}`;
 
     const res = await fetch(url);
@@ -24,37 +27,41 @@ async function getRoute(origin, destination) {
 // ================= CREATE RIDE =================
 exports.createRide = async (req, res) => {
   try {
-    console.log("🔥 CREATE RIDE DEBUG");
-    console.log("BODY:", req.body);
+    console.log("🔥 CREATE RIDE BODY:", req.body);
 
-    const type = req.body?.type || "UBERX";
+    const {
+      type = "UBERX",
+      originCoords,
+      destinationCoords,
+      userId
+    } = req.body;
 
-    const originCoordsRaw = req.body?.originCoords;
-
-    if (!originCoordsRaw) {
-      return res.status(400).json({ error: "Missing originCoords" });
+    // ✅ HARD VALIDATION
+    if (!originCoords || !destinationCoords) {
+      return res.status(400).json({ error: "Missing coordinates" });
     }
 
-    const normalizedOrigin = Array.isArray(originCoordsRaw)
-      ? { lng: originCoordsRaw[0], lat: originCoordsRaw[1] }
-      : originCoordsRaw;
+    if (!userId) {
+      return res.status(400).json({ error: "Missing userId" });
+    }
+
+    const normalizedOrigin = Array.isArray(originCoords)
+      ? { lng: originCoords[0], lat: originCoords[1] }
+      : originCoords;
 
     let driver = null;
 
-    // 🔥 ABSOLUTE SAFE DISPATCH CALL
     try {
-      if (dispatch?.findDriver) {
-        driver = await dispatch.findDriver(type, normalizedOrigin);
-      }
+      driver = await dispatch.findDriver(type, normalizedOrigin);
     } catch (e) {
-      console.log("🔥 DISPATCH CRASH PREVENTED:", e);
-      driver = null;
+      console.log("Dispatch error:", e);
     }
 
     const ride = await Ride.create({
+      userId, // ✅ FIX
       type,
       originCoords: normalizedOrigin,
-      destinationCoords: req.body.destinationCoords,
+      destinationCoords,
       status: driver ? "ACCEPTED" : "REQUESTED",
       driverId: driver ? driver._id : null,
       fare: Math.floor(Math.random() * 30) + 10
@@ -71,10 +78,8 @@ exports.createRide = async (req, res) => {
     res.json(ride);
 
   } catch (err) {
-    console.log("🔥 CREATE RIDE HARD FAIL:", err);
-    console.log(err?.stack);
-
-    res.status(500).json({ error: "Server error" });
+    console.log("🔥 CREATE RIDE ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 };
 
@@ -87,10 +92,17 @@ exports.acceptRide = async (req, res) => {
     const ride = await Ride.findById(rideId);
     if (!ride) return res.status(404).json({ error: "Ride not found" });
 
-    const driver = await Driver.findById(driverId);
+    // ✅ SAFE DRIVER (string OR objectId)
+    let driver = null;
+
+    try {
+      driver = await Driver.findById(driverId);
+    } catch {
+      driver = await Driver.findOne({ userId: driverId });
+    }
 
     ride.status = "ACCEPTED";
-    ride.driverId = driverId;
+    ride.driverId = driver?._id || null;
 
     let coords = await getRoute(ride.originCoords, ride.destinationCoords);
 
@@ -106,16 +118,7 @@ exports.acceptRide = async (req, res) => {
 
     const io = req.app.get("io");
 
-    // 🚀 START FULL SIMULATION (driver → pickup → destination)
-    const { startDriverMovement } = require("../sockets/driverMovement");
-
-    startDriverMovement(
-      io,
-      ride._id,
-      coords,
-      driver.location,
-      ride.originCoords
-    );
+    startDriverMovement(io, ride._id, coords);
 
     if (io) {
       io.emit("ride:update", {
@@ -131,7 +134,7 @@ exports.acceptRide = async (req, res) => {
 
   } catch (err) {
     console.log("acceptRide error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: err.message });
   }
 };
 
@@ -160,7 +163,7 @@ exports.updateStatus = async (req, res) => {
 
   } catch (err) {
     console.log("updateStatus error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: err.message });
   }
 };
 
@@ -171,6 +174,6 @@ exports.getRides = async (req, res) => {
     res.json(rides);
   } catch (err) {
     console.log("getRides error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: err.message });
   }
 };
