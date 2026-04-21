@@ -1,18 +1,14 @@
 const express = require("express");
 const router = express.Router();
 
-const {
-  createRide,
-  acceptRide,
-  updateStatus,
-  getRides
-} = require("../controllers/ride.controller");
+const ctrl = require("../controllers/ride.controller");
 
-// ✅ THIS FIXES YOUR 404
-router.get("/", getRides);
+router.get("/", ctrl.getRides);
+router.post("/", ctrl.createRide);
 
-router.post("/", createRide);
-router.patch("/:id/accept", acceptRide);
-router.patch("/:id/status", updateStatus);
+router.patch("/:id/accept", ctrl.acceptRide);
+router.patch("/:id/arrived", ctrl.driverArrived);
+router.patch("/:id/start", ctrl.startTrip);
+router.patch("/:id/complete", ctrl.completeRide);
 
 module.exports = router;
