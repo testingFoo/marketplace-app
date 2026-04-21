@@ -22,7 +22,13 @@ router.post("/init", async (req, res) => {
         name,
         vehicleType: vehicleType || "UBERX",
         status: "IDLE",
-        available: true
+        available: true,
+
+        // 🔥 SAFE DEFAULT LOCATION (KRAKÓW)
+        location: {
+          lat: 50.0647 + (Math.random() - 0.5) * 0.05,
+          lng: 19.9450 + (Math.random() - 0.5) * 0.05
+        }
       });
     }
 
