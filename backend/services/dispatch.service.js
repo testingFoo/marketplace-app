@@ -1,4 +1,3 @@
-
 const Driver = require("../models/Driver");
 
 exports.findDriver = async (type, originCoords) => {
