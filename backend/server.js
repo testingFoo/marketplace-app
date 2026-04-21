@@ -3,7 +3,7 @@ const http = require("http");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const { Server } = require("socket.io");
-require("./sockets")(io);
+
 
 const rideRoutes = require("./routes/ride.routes");
 const authRoutes = require("./routes/auth.routes");
@@ -35,7 +35,13 @@ const io = new Server(server, {
 
 app.set("io", io);
 
-// ================= SOCKET =================
+// ================= LOAD SOCKET HANDLERS =================
+// 🔥 THIS IS THE LINE YOU WERE MISSING / UNCLEAR ABOUT
+require("./sockets")(io);
+
+
+
+// ================= SOCKET CORE=================
 io.on("connection", (socket) => {
   console.log("🟢 Client connected:", socket.id);
 
