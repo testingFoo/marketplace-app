@@ -7,6 +7,7 @@ let map;
 let origin = null;
 let destination = null;
 let driverMarker = null;
+let routeLine = null;
 
 let activeTab = "passenger";
 
@@ -19,7 +20,15 @@ function initSocket() {
   });
 
   socket.on("ride:new", loadRides);
-  socket.on("ride:update", loadRides);
+
+  // ✅ UPDATED
+  socket.on("ride:update", (ride) => {
+    loadRides();
+
+    if (ride.routeCoords) {
+      drawRoute(ride.routeCoords);
+    }
+  });
 
   socket.on("driver-location-update", (data) => {
     const { location, etaSeconds } = data;
@@ -37,9 +46,15 @@ function initSocket() {
 
   socket.on("ride-completed", () => {
     alert("Ride completed ✅");
+
     if (driverMarker) {
       map.removeLayer(driverMarker);
       driverMarker = null;
+    }
+
+    if (routeLine) {
+      map.removeLayer(routeLine);
+      routeLine = null;
     }
   });
 }
@@ -51,6 +66,25 @@ function initMap() {
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "OSM"
   }).addTo(map);
+}
+
+// ================= DRAW ROUTE =================
+function drawRoute(coords) {
+  if (!coords || coords.length === 0) return;
+
+  if (routeLine) {
+    map.removeLayer(routeLine);
+  }
+
+  routeLine = L.polyline(
+    coords.map(c => [c[1], c[0]]),
+    {
+      color: "blue",
+      weight: 4
+    }
+  ).addTo(map);
+
+  map.fitBounds(routeLine.getBounds());
 }
 
 // ================= TAB =================
@@ -148,15 +182,8 @@ function submitRide() {
             ? "VAN"
             : "FREIGHT",
 
-      originCoords: {
-        lng: origin.lng,
-        lat: origin.lat
-      },
-
-      destinationCoords: {
-        lng: destination.lng,
-        lat: destination.lat
-      }
+      originCoords: origin,
+      destinationCoords: destination
     })
   })
     .then(async (res) => {
@@ -173,7 +200,6 @@ function submitRide() {
     })
     .catch(err => console.log("Submit error:", err));
 }
-
 
 window.submitRide = submitRide;
 window.setTab = setTab;
@@ -200,7 +226,6 @@ function render(rides) {
     list.innerHTML += `
       <div class="card">
         <b>${r.type || "UNKNOWN"}</b><br/>
-        ${r.origin || "-"} → ${r.destination || "-"}<br/>
         Status: ${r.status || "-"}<br/>
         Driver: ${r.driverId || "OPEN"}<br/>
         Fare: $${r.fare || 0}
