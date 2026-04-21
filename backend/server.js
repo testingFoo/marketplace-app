@@ -3,6 +3,7 @@ const http = require("http");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const { Server } = require("socket.io");
+require("./sockets")(io);
 
 const rideRoutes = require("./routes/ride.routes");
 const authRoutes = require("./routes/auth.routes");
