@@ -109,8 +109,8 @@ function carIcon() {
       <img src="https://tb-static.uber.com/prod/udam-assets/21a3bbd1-7433-4328-b610-31adb4c09e0a.svg"
            style="width:40px;height:40px;transform:rotate(0deg);" />
     `,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20]
+    iconSize: [80, 80],
+    iconAnchor: [40, 40]
   });
 }
 
