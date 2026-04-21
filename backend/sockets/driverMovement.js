@@ -11,19 +11,14 @@ function startDriverMovement(io, rideId, coords) {
   let index = 0;
   let progress = 0;
 
-  const stepSpeed = 0.02; // smaller = smoother/slower
+  let lastDbUpdate = Date.now();
+
+  const stepSpeed = 0.02;
 
   const interval = setInterval(async () => {
     try {
-      const ride = await Ride.findById(rideId);
-      if (!ride || ride.status === "COMPLETED") {
-        clearInterval(interval);
-        return;
-      }
 
-      const start = coords[index];
-      const end = coords[index + 1];
-
+      const [start, end] = [coords[index], coords[index + 1]];
       if (!start || !end) {
         clearInterval(interval);
         return;
@@ -36,20 +31,12 @@ function startDriverMovement(io, rideId, coords) {
         index++;
 
         if (index >= coords.length - 1) {
-          // COMPLETE RIDE
           await Ride.findByIdAndUpdate(rideId, {
             status: "COMPLETED"
           });
 
-          if (ride.driverId) {
-            await Driver.findByIdAndUpdate(ride.driverId, {
-              status: "IDLE",
-              available: true
-            });
-          }
-
-          io.emit("ride-completed", { rideId });
           clearInterval(interval);
+          io.emit("ride-completed", { rideId });
           return;
         }
       }
@@ -57,10 +44,19 @@ function startDriverMovement(io, rideId, coords) {
       const lng = interpolate(start[0], end[0], progress);
       const lat = interpolate(start[1], end[1], progress);
 
-      if (ride.driverId) {
-        await Driver.findByIdAndUpdate(ride.driverId, {
-          location: { lat, lng }
-        });
+      const now = Date.now();
+
+      // 🔥 ONLY WRITE TO DB EVERY 1 SECOND
+      if (now - lastDbUpdate > 1000) {
+        const ride = await Ride.findById(rideId);
+
+        if (ride?.driverId) {
+          await Driver.findByIdAndUpdate(ride.driverId, {
+            location: { lat, lng }
+          });
+        }
+
+        lastDbUpdate = now;
       }
 
       const remainingRatio = (coords.length - index) / coords.length;
@@ -77,7 +73,7 @@ function startDriverMovement(io, rideId, coords) {
       console.log("Movement error:", err);
       clearInterval(interval);
     }
-  }, 100);
+  }, 80);
 }
 
 module.exports = { startDriverMovement };
