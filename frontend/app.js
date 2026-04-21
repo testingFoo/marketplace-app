@@ -39,26 +39,40 @@ function initSocket() {
     drawTripMarkers(ride);
   });
 
-  socket.on("driver-location-update", (data) => {
-    if (!activeRide || data.rideId !== activeRide._id) return;
+socket.on("driver-location-update", (data) => {
+  // 🔥 only track active ride (same as your old logic)
+  if (!activeRide || data.rideId !== activeRide._id) return;
 
-    console.log("🚗 DRIVER:", data);
+  console.log("🚗 DRIVER:", data);
 
-    const { location, etaSeconds } = data;
-    if (!location) return;
+  const { location, etaSeconds } = data;
+  if (!location) return;
 
-    const latlng = [location.lat, location.lng];
+  const latlng = [location.lat, location.lng];
 
-    if (!driverMarker) {
-      driverMarker = L.marker(latlng, { icon: carIcon() })
-        .addTo(map)
-        .bindPopup("🚗 Driver");
-    } else {
-      driverMarker.setLatLng(latlng);
-    }
+  // 🔥 create OR update marker
+  if (!driverMarker) {
+    driverMarker = L.marker(latlng, { icon: carIcon() })
+      .addTo(map)
+      .bindPopup("🚗 Driver");
+  } else {
+    driverMarker.setLatLng(latlng);
+  }
 
-    updateETA(Math.round((etaSeconds || 0) / 60));
+  // 🔥 smooth camera follow (NEW but safe)
+  map.panTo(latlng, {
+    animate: true,
+    duration: 0.5
   });
+
+  // 🔥 keep your ETA
+  updateETA(Math.round((etaSeconds || 0) / 60));
+
+  // 🔥 add Uber-style UI (NEW but non-breaking)
+  if (typeof updateUberUI === "function") {
+    updateUberUI("EN_ROUTE", etaSeconds);
+  }
+});
 
   socket.on("ride-completed", () => {
     alert("Ride completed");
