@@ -18,32 +18,45 @@ function startDriverMovement(io, rideId, coords) {
 
       const [lng, lat] = coords[index];
 
-      // 🔥 UPDATE DRIVER LOCATION IN DB
+      // 🔥 update driver location
       if (ride.driverId) {
         await Driver.findByIdAndUpdate(ride.driverId, {
           location: { lat, lng }
         });
       }
 
-      // ETA calculation
+      // ETA
       const remainingRatio = (total - index) / total;
       const etaSeconds = Math.round(remainingRatio * 300);
+
+      // 🔥 NEW: movement phase detection
+      let phase = "EN_ROUTE";
+
+      if (index < total * 0.5) {
+        phase = "TO_PICKUP";
+      } else {
+        phase = "TO_DESTINATION";
+      }
 
       io.emit("driver-location-update", {
         rideId,
         location: { lat, lng },
         progress: index / total,
-        etaSeconds
+        etaSeconds,
+        phase
       });
 
       index++;
 
+      // ================= END OF ROUTE =================
       if (index >= total) {
+        clearInterval(interval);
+
         await Ride.findByIdAndUpdate(rideId, {
           status: "COMPLETED"
         });
 
-        // 🔥 FREE DRIVER AGAIN
+        // free driver
         if (ride.driverId) {
           await Driver.findByIdAndUpdate(ride.driverId, {
             status: "IDLE",
@@ -52,8 +65,6 @@ function startDriverMovement(io, rideId, coords) {
         }
 
         io.emit("ride-completed", { rideId });
-
-        clearInterval(interval);
       }
 
     } catch (err) {
@@ -61,7 +72,7 @@ function startDriverMovement(io, rideId, coords) {
       clearInterval(interval);
     }
 
-  }, 300); // slower = more stable
+  }, 300);
 }
 
 module.exports = { startDriverMovement };
