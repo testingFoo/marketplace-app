@@ -29,11 +29,6 @@ exports.createRide = async (req, res) => {
 
     console.log("REQ BODY:", req.body);
 
-    console.log("TYPE:", req.body.type);
-    console.log("ORIGIN:", req.body.originCoords);
-    console.log("DEST:", req.body.destinationCoords);
-
-    // ✅ NORMALIZE COORDS (THIS FIXES YOUR CRASH)
     const originCoords = req.body.originCoords;
 
     const normalizedOrigin = Array.isArray(originCoords)
@@ -70,8 +65,6 @@ exports.createRide = async (req, res) => {
 
   } catch (err) {
     console.error("🔥 createRide FULL ERROR:", err);
-    console.error("STACK:", err?.stack);
-
     res.status(500).json({ error: "Server error" });
   }
 };
@@ -91,10 +84,6 @@ exports.acceptRide = async (req, res) => {
     ride.status = "ACCEPTED";
     ride.driverId = driverId;
 
-    await ride.save();
-
-    const io = req.app.get("io");
-
     let coords = null;
 
     if (
@@ -109,24 +98,36 @@ exports.acceptRide = async (req, res) => {
       );
     }
 
+    // fallback
     if (!coords) {
       coords = [
-        [
-          ride.originCoords?.lng || 0,
-          ride.originCoords?.lat || 0
-        ],
-        [
-          ride.destinationCoords?.lng || 0,
-          ride.destinationCoords?.lat || 0
-        ]
+        [ride.originCoords?.lng || 0, ride.originCoords?.lat || 0],
+        [ride.destinationCoords?.lng || 0, ride.destinationCoords?.lat || 0]
       ];
     }
 
+    // ✅ SAVE ROUTE INTO DB
+    ride.routeCoords = coords;
+
+    await ride.save();
+
+    const io = req.app.get("io");
+
+    // 🚗 START MOVEMENT
     startDriverMovement(io, ride._id, coords);
 
-    if (io) io.emit("ride:update", ride);
+    // ✅ SEND ROUTE TO FRONTEND
+    if (io) {
+      io.emit("ride:update", {
+        ...ride.toObject(),
+        routeCoords: coords
+      });
+    }
 
-    res.json(ride);
+    res.json({
+      ...ride.toObject(),
+      routeCoords: coords
+    });
 
   } catch (err) {
     console.log("acceptRide error:", err);
