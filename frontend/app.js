@@ -36,6 +36,7 @@ function initSocket() {
   });
 
   socket.on("driver-location-update", ({ location, etaSeconds }) => {
+    if (!activeRide || data.rideId !== activeRide._id) return;
     if (!location) return;
 
     const latlng = [location.lat, location.lng];
