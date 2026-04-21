@@ -24,25 +24,37 @@ async function getRoute(origin, destination) {
 // ================= CREATE RIDE =================
 exports.createRide = async (req, res) => {
   try {
+    console.log("🔥 CREATE RIDE DEBUG");
+    console.log("BODY:", req.body);
 
-    console.log("REQ BODY:", req.body);
+    const type = req.body?.type || "UBERX";
 
-    const originCoords = req.body.originCoords;
+    const originCoordsRaw = req.body?.originCoords;
 
-    const normalizedOrigin = Array.isArray(originCoords)
-      ? { lng: originCoords[0], lat: originCoords[1] }
-      : originCoords;
+    if (!originCoordsRaw) {
+      return res.status(400).json({ error: "Missing originCoords" });
+    }
+
+    const normalizedOrigin = Array.isArray(originCoordsRaw)
+      ? { lng: originCoordsRaw[0], lat: originCoordsRaw[1] }
+      : originCoordsRaw;
 
     let driver = null;
 
+    // 🔥 ABSOLUTE SAFE DISPATCH CALL
     try {
-      driver = await dispatch.findDriver(req.body.type, normalizedOrigin);
+      if (dispatch?.findDriver) {
+        driver = await dispatch.findDriver(type, normalizedOrigin);
+      }
     } catch (e) {
-      console.log("Dispatch error:", e);
+      console.log("🔥 DISPATCH CRASH PREVENTED:", e);
+      driver = null;
     }
 
     const ride = await Ride.create({
-      ...req.body,
+      type,
+      originCoords: normalizedOrigin,
+      destinationCoords: req.body.destinationCoords,
       status: driver ? "ACCEPTED" : "REQUESTED",
       driverId: driver ? driver._id : null,
       fare: Math.floor(Math.random() * 30) + 10
@@ -59,7 +71,9 @@ exports.createRide = async (req, res) => {
     res.json(ride);
 
   } catch (err) {
-    console.error("createRide error:", err);
+    console.log("🔥 CREATE RIDE HARD FAIL:", err);
+    console.log(err?.stack);
+
     res.status(500).json({ error: "Server error" });
   }
 };
