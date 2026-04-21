@@ -65,9 +65,9 @@ async function startDriverMovement(io, rideId, coords) {
         index++;
 
         // 🔥 ARRIVED AT PICKUP
-        if (index === 2) {
+        if (index === 1) {
           await Ride.findByIdAndUpdate(rideId, {
-            status: "IN_PROGRESS"
+           status: "DRIVER_ARRIVED"
           });
 
           io.emit("ride:update", {
