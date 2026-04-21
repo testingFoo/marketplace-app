@@ -1,7 +1,6 @@
 const Ride = require("../models/Ride");
 const Driver = require("../models/Driver");
 
-// ================= RANDOM START =================
 function randomNear(coord) {
   const offset = () => (Math.random() - 0.5) * 0.03;
 
@@ -15,18 +14,17 @@ function interpolate(a, b, t) {
   return a + (b - a) * t;
 }
 
-// ================= MAIN DRIVER SIM =================
 function startDriverMovement(io, rideId, routeCoords) {
-  if (!routeCoords || routeCoords.length < 2) {
-    console.log("❌ No routeCoords");
+  if (!Array.isArray(routeCoords) || routeCoords.length < 2) {
+    console.log("❌ Invalid routeCoords");
     return;
   }
 
   let index = 0;
   let progress = 0;
-  let lastDbUpdate = Date.now();
-  const stepSpeed = 0.02;
   let phase = "TO_PICKUP";
+
+  let lastDbUpdate = Date.now();
 
   let current = randomNear({
     lat: routeCoords[0][1],
@@ -47,8 +45,8 @@ function startDriverMovement(io, rideId, routeCoords) {
           lng: routeCoords[0][0]
         };
 
-        current.lat = interpolate(current.lat, target.lat, stepSpeed);
-        current.lng = interpolate(current.lng, target.lng, stepSpeed);
+        current.lat = interpolate(current.lat, target.lat, 0.02);
+        current.lng = interpolate(current.lng, target.lng, 0.02);
 
         const dist =
           Math.abs(current.lat - target.lat) +
@@ -80,7 +78,7 @@ function startDriverMovement(io, rideId, routeCoords) {
           return;
         }
 
-        progress += stepSpeed;
+        progress += 0.02;
 
         if (progress >= 1) {
           progress = 0;
@@ -101,17 +99,15 @@ function startDriverMovement(io, rideId, routeCoords) {
       }
 
       // ================= SOCKET =================
-      const etaSeconds = Math.round((routeCoords.length - index) * 15);
-
       io.emit("driver-location-update", {
         rideId,
         location: current,
-        etaSeconds,
+        etaSeconds: Math.max(10, (routeCoords.length - index) * 12),
         phase
       });
 
     } catch (err) {
-      console.log("❌ Movement error:", err);
+      console.log("🔥 Movement error:", err);
       clearInterval(interval);
     }
   }, 1000);
