@@ -13,6 +13,8 @@ let routeLine = null;
 let pickupMarker = null;
 let dropMarker = null;
 
+let activeRide = null;
+
 // ================= INIT =================
 window.onload = () => {
   initMap();
@@ -31,18 +33,26 @@ function initSocket() {
   socket.on("ride:update", (ride) => {
     loadRides();
 
+    activeRide = ride; // ✅ important
+
     if (ride.routeCoords) drawRoute(ride.routeCoords);
     drawTripMarkers(ride);
   });
 
-  socket.on("driver-location-update", ({ location, etaSeconds }) => {
+  socket.on("driver-location-update", (data) => {
     if (!activeRide || data.rideId !== activeRide._id) return;
+
+    console.log("🚗 DRIVER:", data);
+
+    const { location, etaSeconds } = data;
     if (!location) return;
 
     const latlng = [location.lat, location.lng];
 
     if (!driverMarker) {
-      driverMarker = L.marker(latlng, { icon: carIcon() }).addTo(map);
+      driverMarker = L.marker(latlng, { icon: carIcon() })
+        .addTo(map)
+        .bindPopup("🚗 Driver");
     } else {
       driverMarker.setLatLng(latlng);
     }
@@ -55,6 +65,9 @@ function initSocket() {
 
     if (driverMarker) map.removeLayer(driverMarker);
     if (routeLine) map.removeLayer(routeLine);
+
+    driverMarker = null;
+    routeLine = null;
 
     clearTripMarkers();
   });
@@ -170,16 +183,9 @@ function submitRide() {
       destinationCoords: destination
     })
   })
-  .then(async (res) => {
-    const data = await res.json();
-
-    if (!res.ok) {
-      console.log("❌ ERROR:", data);
-      alert(data.error);
-      return;
-    }
-
-    console.log("✅ Ride created:", data);
+  .then(r => r.json())
+  .then(data => {
+    console.log("Ride:", data);
     loadRides();
   });
 }
