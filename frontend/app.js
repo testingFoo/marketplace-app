@@ -195,17 +195,36 @@ function submitRide() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      userId: "demo-user", // ✅ REQUIRED FIX
+
       type: "UBERX",
-      originCoords: origin,
-      destinationCoords: destination
+
+      originCoords: {
+        lng: origin.lng,
+        lat: origin.lat
+      },
+
+      destinationCoords: {
+        lng: destination.lng,
+        lat: destination.lat
+      }
     })
   })
-  .then(r => r.json())
-  .then(data => {
-    console.log("Ride:", data);
+  .then(async (res) => {
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.log("❌ BACKEND ERROR:", data);
+      alert(data.error || "Server error");
+      return;
+    }
+
+    console.log("✅ Ride:", data);
     loadRides();
-  });
+  })
+  .catch(err => console.log("Submit error:", err));
 }
+
 
 // ================= LOAD =================
 function loadRides() {
