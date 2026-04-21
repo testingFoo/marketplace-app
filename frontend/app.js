@@ -28,51 +28,54 @@ window.onload = () => {
 function initSocket() {
   socket = io(API);
 
+  socket.on("connect", () => {
+    console.log("Connected");
+  });
+
   socket.on("ride:new", loadRides);
 
+  // 🔥 FIX 4 — ACTIVE RIDE SYNC
   socket.on("ride:update", (ride) => {
+    console.log("📡 RIDE UPDATE:", ride);
+
     loadRides();
 
-    activeRide = ride; // ✅ important
+    // 🔥 Always track latest active ride
+    activeRide = ride;
 
-    if (ride.routeCoords) drawRoute(ride.routeCoords);
+    // 🔥 FIX 3 — DRAW ROUTE
+    if (ride.routeCoords && ride.routeCoords.length > 0) {
+      drawRoute(ride.routeCoords);
+    }
+
     drawTripMarkers(ride);
   });
 
-socket.on("driver-location-update", (data) => {
-  // 🔥 only track active ride (same as your old logic)
-  if (!activeRide || data.rideId !== activeRide._id) return;
+  // 🔥 DRIVER MOVEMENT
+  socket.on("driver-location-update", (data) => {
+    if (!activeRide || data.rideId !== activeRide._id) return;
 
-  console.log("🚗 DRIVER:", data);
+    console.log("🚗 DRIVER:", data);
 
-  const { location, etaSeconds } = data;
-  if (!location) return;
+    const { location, etaSeconds } = data;
+    if (!location) return;
 
-  const latlng = [location.lat, location.lng];
+    const latlng = [location.lat, location.lng];
 
-  // 🔥 create OR update marker
-  if (!driverMarker) {
-    driverMarker = L.marker(latlng, { icon: carIcon() })
-      .addTo(map)
-      .bindPopup("🚗 Driver");
-  } else {
-    driverMarker.setLatLng(latlng);
-  }
+    if (!driverMarker) {
+      driverMarker = L.marker(latlng, { icon: carIcon() })
+        .addTo(map)
+        .bindPopup("🚗 Driver");
+    } else {
+      driverMarker.setLatLng(latlng);
+    }
 
-  // 🔥 smooth camera follow (NEW but safe)
-  map.panTo(latlng, {
-    animate: true,
-    duration: 0.5
-  });
+    // smooth follow
+    map.panTo(latlng, { animate: true, duration: 0.5 });
 
-  // 🔥 keep your ETA
-  updateETA(Math.round((etaSeconds || 0) / 60));
-
-  // 🔥 add Uber-style UI (NEW but non-breaking)
-  if (typeof updateUberUI === "function") {
+    updateETA(Math.round((etaSeconds || 0) / 60));
     updateUberUI("EN_ROUTE", etaSeconds);
-  }
-});
+  });
 
   socket.on("ride-completed", () => {
     alert("Ride completed");
@@ -84,6 +87,8 @@ socket.on("driver-location-update", (data) => {
     routeLine = null;
 
     clearTripMarkers();
+
+    updateUberUI("COMPLETED", 0);
   });
 }
 
@@ -100,12 +105,15 @@ function initMap() {
 function carIcon() {
   return L.icon({
     iconUrl: "https://cdn-icons-png.flaticon.com/512/744/744465.png",
-    iconSize: [35, 35]
+    iconSize: [35, 35],
+    iconAnchor: [17, 17]
   });
 }
 
 // ================= ROUTE =================
 function drawRoute(coords) {
+  if (!coords || coords.length === 0) return;
+
   if (routeLine) map.removeLayer(routeLine);
 
   routeLine = L.polyline(
@@ -121,17 +129,24 @@ function drawTripMarkers(ride) {
   clearTripMarkers();
 
   if (ride.originCoords) {
-    pickupMarker = L.marker([ride.originCoords.lat, ride.originCoords.lng]).addTo(map);
+    pickupMarker = L.marker(
+      [ride.originCoords.lat, ride.originCoords.lng]
+    ).addTo(map).bindPopup("📍 Pickup");
   }
 
   if (ride.destinationCoords) {
-    dropMarker = L.marker([ride.destinationCoords.lat, ride.destinationCoords.lng]).addTo(map);
+    dropMarker = L.marker(
+      [ride.destinationCoords.lat, ride.destinationCoords.lng]
+    ).addTo(map).bindPopup("🏁 Dropoff");
   }
 }
 
 function clearTripMarkers() {
   if (pickupMarker) map.removeLayer(pickupMarker);
   if (dropMarker) map.removeLayer(dropMarker);
+
+  pickupMarker = null;
+  dropMarker = null;
 }
 
 // ================= SEARCH =================
@@ -139,6 +154,7 @@ async function search(q) {
   const res = await fetch(
     `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${MAPBOX_TOKEN}`
   );
+
   const data = await res.json();
   return data.features || [];
 }
@@ -165,17 +181,22 @@ function setupSearch(id) {
         div.onclick = () => {
           input.value = r.place_name;
 
-          const c = { lng: r.center[0], lat: r.center[1] };
+          const c = {
+            lng: r.center[0],
+            lat: r.center[1]
+          };
 
           if (id === "origin") origin = c;
           else destination = c;
 
           box.innerHTML = "";
+
           L.marker([c.lat, c.lng]).addTo(map);
         };
 
         box.appendChild(div);
       });
+
     }, 300);
   });
 }
@@ -197,23 +218,34 @@ function submitRide() {
       destinationCoords: destination
     })
   })
-  .then(r => r.json())
-  .then(data => {
-    console.log("Ride:", data);
+  .then(async (res) => {
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.log("❌ BACKEND ERROR:", data);
+      alert(data.error || "Server error");
+      return;
+    }
+
+    console.log("✅ Ride created:", data);
     loadRides();
-  });
+  })
+  .catch(err => console.log("Submit error:", err));
 }
 
 // ================= LOAD =================
 function loadRides() {
   fetch(`${API}/api/rides`)
     .then(r => r.json())
-    .then(render);
+    .then(render)
+    .catch(err => console.log("Load rides error:", err));
 }
 
 // ================= RENDER =================
 function render(rides) {
   const list = document.getElementById("rides");
+  if (!list) return;
+
   list.innerHTML = "";
 
   rides.forEach(r => {
@@ -240,8 +272,45 @@ function updateETA(mins) {
     el.style.background = "#000";
     el.style.color = "#0f0";
     el.style.padding = "10px";
+    el.style.zIndex = 9999;
     document.body.appendChild(el);
   }
 
   el.innerText = `ETA: ${mins} min`;
+}
+
+// ================= UBER UI =================
+function updateUberUI(status, eta) {
+  let ui = document.getElementById("uberUI");
+
+  if (!ui) {
+    ui = document.createElement("div");
+    ui.id = "uberUI";
+    ui.style.position = "fixed";
+    ui.style.bottom = "0";
+    ui.style.left = "0";
+    ui.style.width = "100%";
+    ui.style.background = "#111";
+    ui.style.color = "white";
+    ui.style.padding = "15px";
+    ui.style.zIndex = 9999;
+    document.body.appendChild(ui);
+  }
+
+  let text = "";
+
+  if (status === "EN_ROUTE") {
+    text = `🚗 Driver arriving in ${Math.round((eta || 0) / 60)} min`;
+  } else if (status === "COMPLETED") {
+    text = "✅ Ride completed";
+  } else {
+    text = "🟡 Waiting for driver...";
+  }
+
+  ui.innerHTML = `
+    <div style="font-size:16px;font-weight:bold">${text}</div>
+    <div style="height:6px;background:#333;margin-top:10px">
+      <div style="height:6px;background:lime;width:${Math.min(100, (eta || 0) / 3)}%"></div>
+    </div>
+  `;
 }
