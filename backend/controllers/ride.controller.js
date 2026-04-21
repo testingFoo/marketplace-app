@@ -11,9 +11,7 @@ async function getRoute(origin, destination) {
     const res = await fetch(url);
     const data = await res.json();
 
-    if (!data.routes || data.routes.length === 0) {
-      return null;
-    }
+    if (!data.routes || data.routes.length === 0) return null;
 
     return data.routes[0].geometry.coordinates;
 
@@ -38,10 +36,7 @@ exports.createRide = async (req, res) => {
     let driver = null;
 
     try {
-      driver = await dispatch.findDriver(
-        req.body.type,
-        normalizedOrigin
-      );
+      driver = await dispatch.findDriver(req.body.type, normalizedOrigin);
     } catch (e) {
       console.log("Dispatch error:", e);
     }
@@ -64,7 +59,7 @@ exports.createRide = async (req, res) => {
     res.json(ride);
 
   } catch (err) {
-    console.error("🔥 createRide FULL ERROR:", err);
+    console.error("createRide error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
@@ -76,47 +71,38 @@ exports.acceptRide = async (req, res) => {
     const rideId = req.params.id;
 
     const ride = await Ride.findById(rideId);
+    if (!ride) return res.status(404).json({ error: "Ride not found" });
 
-    if (!ride) {
-      return res.status(404).json({ error: "Ride not found" });
-    }
+    const driver = await Driver.findById(driverId);
 
     ride.status = "ACCEPTED";
     ride.driverId = driverId;
 
-    let coords = null;
+    let coords = await getRoute(ride.originCoords, ride.destinationCoords);
 
-    if (
-      ride.originCoords?.lng != null &&
-      ride.originCoords?.lat != null &&
-      ride.destinationCoords?.lng != null &&
-      ride.destinationCoords?.lat != null
-    ) {
-      coords = await getRoute(
-        ride.originCoords,
-        ride.destinationCoords
-      );
-    }
-
-    // fallback
     if (!coords) {
       coords = [
-        [ride.originCoords?.lng || 0, ride.originCoords?.lat || 0],
-        [ride.destinationCoords?.lng || 0, ride.destinationCoords?.lat || 0]
+        [ride.originCoords.lng, ride.originCoords.lat],
+        [ride.destinationCoords.lng, ride.destinationCoords.lat]
       ];
     }
 
-    // ✅ SAVE ROUTE INTO DB
     ride.routeCoords = coords;
-
     await ride.save();
 
     const io = req.app.get("io");
 
-    // 🚗 START MOVEMENT
-    startDriverMovement(io, ride._id, coords);
+    // 🚀 START FULL SIMULATION (driver → pickup → destination)
+    const { startDriverMovement } = require("../sockets/driverMovement");
 
-    // ✅ SEND ROUTE TO FRONTEND
+    startDriverMovement(
+      io,
+      ride._id,
+      coords,
+      driver.location,
+      ride.originCoords
+    );
+
     if (io) {
       io.emit("ride:update", {
         ...ride.toObject(),
@@ -141,10 +127,7 @@ exports.updateStatus = async (req, res) => {
     const io = req.app.get("io");
 
     const ride = await Ride.findById(req.params.id);
-
-    if (!ride) {
-      return res.status(404).json({ error: "Ride not found" });
-    }
+    if (!ride) return res.status(404).json({ error: "Ride not found" });
 
     ride.status = req.body.status;
 
