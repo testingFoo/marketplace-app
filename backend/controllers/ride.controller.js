@@ -1,40 +1,16 @@
 const Ride = require("../models/Ride");
 const Driver = require("../models/Driver");
 const dispatch = require("../services/dispatch.service");
-const { startDriverMovement } = require("../sockets/driverMovement");
 
-// ✅ SAFE FETCH (no node-fetch install needed)
-let fetchFn;
-try {
-  fetchFn = fetch;
-} catch {
-  fetchFn = (...args) =>
-    import("node-fetch").then(({ default: f }) => f(...args));
-}
-
-// ================= RANDOM DRIVER START =================
-function randomNear(coord) {
-  const offset = () => (Math.random() - 0.5) * 0.02; // ~2km
-  return {
-    lng: coord.lng + offset(),
-    lat: coord.lat + offset()
-  };
-}
-
-// ================= GET MAPBOX ROUTE =================
 async function getRoute(origin, destination) {
   try {
     const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?geometries=geojson&access_token=${process.env.MAPBOX_TOKEN}`;
 
-    const res = await fetchFn(url);
+    const res = await fetch(url);
     const data = await res.json();
 
-    if (!data.routes || data.routes.length === 0) return null;
-
-    return data.routes[0].geometry.coordinates;
-
-  } catch (err) {
-    console.log("Route fetch error:", err);
+    return data.routes?.[0]?.geometry?.coordinates || null;
+  } catch {
     return null;
   }
 }
@@ -42,154 +18,96 @@ async function getRoute(origin, destination) {
 // ================= CREATE RIDE =================
 exports.createRide = async (req, res) => {
   try {
-    const {
-      type = "UBERX",
-      originCoords,
-      destinationCoords,
-      userId
-    } = req.body;
-
-    if (!originCoords || !destinationCoords || !userId) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    const normalizedOrigin = Array.isArray(originCoords)
-      ? { lng: originCoords[0], lat: originCoords[1] }
-      : originCoords;
-
-    let driver = null;
-
-    try {
-      driver = await dispatch.findDriver(type, normalizedOrigin);
-    } catch (e) {
-      console.log("Dispatch error:", e);
-    }
-
     const ride = await Ride.create({
-      userId,
-      type,
-      originCoords: normalizedOrigin,
-      destinationCoords,
-      status: driver ? "ACCEPTED" : "REQUESTED",
-      driverId: driver ? driver._id : null,
+      ...req.body,
+      status: "REQUESTED",
       fare: Math.floor(Math.random() * 30) + 10
     });
 
-    if (driver) {
-      driver.available = false;
-      await driver.save();
-    }
-
     const io = req.app.get("io");
-    if (io) io.emit("ride:new", ride);
+    io?.emit("ride:new", ride);
 
     res.json(ride);
-
   } catch (err) {
-    console.log("CREATE RIDE ERROR:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Server error" });
   }
 };
 
 // ================= ACCEPT RIDE =================
 exports.acceptRide = async (req, res) => {
   try {
-    const { driverId } = req.body;
-    const rideId = req.params.id;
-
-    const ride = await Ride.findById(rideId);
-    if (!ride) return res.status(404).json({ error: "Ride not found" });
-
-    let driver = null;
-
-    try {
-      driver = await Driver.findById(driverId);
-    } catch {
-      driver = await Driver.findOne({ userId: driverId });
-    }
-
-    ride.status = "DRIVER_ARRIVING";
-    ride.driverId = driver?._id || null;
-
-    let coords = await getRoute(ride.originCoords, ride.destinationCoords);
-
-    // fallback route
-    if (!coords || coords.length < 2) {
-      coords = [
-        [ride.originCoords.lng, ride.originCoords.lat],
-        [ride.destinationCoords.lng, ride.destinationCoords.lat]
-      ];
-    }
-
-    // ✅ DRIVER START NEAR PICKUP
-    const start = randomNear(ride.originCoords);
-
-    const fullRoute = [
-      [start.lng, start.lat], // driver start
-      ...coords              // pickup → destination
-    ];
-
-    ride.routeCoords = fullRoute;
-    await ride.save();
-
-    const io = req.app.get("io");
-
-    startDriverMovement(io, ride._id, fullRoute);
-
-    if (io) {
-      io.emit("ride:update", {
-        ...ride.toObject(),
-        routeCoords: fullRoute
-      });
-    }
-
-    res.json({
-      ...ride.toObject(),
-      routeCoords: fullRoute
-    });
-
-  } catch (err) {
-    console.log("acceptRide error:", err);
-    res.status(500).json({ error: err.message });
-  }
-};
-
-// ================= UPDATE STATUS =================
-exports.updateStatus = async (req, res) => {
-  try {
-    const io = req.app.get("io");
-
     const ride = await Ride.findById(req.params.id);
     if (!ride) return res.status(404).json({ error: "Ride not found" });
 
-    ride.status = req.body.status;
-
-    if (req.body.status === "COMPLETED") {
-      await Driver.findByIdAndUpdate(ride.driverId, {
-        available: true,
-        $inc: { completedTrips: 1 }
-      });
+    if (ride.status !== "REQUESTED") {
+      return res.status(400).json({ error: "Already taken" });
     }
+
+    ride.status = "ACCEPTED";
+    ride.driverId = req.body.driverId;
 
     await ride.save();
 
-    if (io) io.emit("ride:update", ride);
+    const io = req.app.get("io");
+    io?.emit("ride:update", ride);
 
     res.json(ride);
-
   } catch (err) {
-    console.log("updateStatus error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ================= DRIVER ARRIVED =================
+exports.driverArrived = async (req, res) => {
+  try {
+    const ride = await Ride.findById(req.params.id);
+    ride.status = "DRIVER_ARRIVED";
+
+    await ride.save();
+
+    req.app.get("io")?.emit("ride:update", ride);
+
+    res.json(ride);
+  } catch {
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ================= START TRIP =================
+exports.startTrip = async (req, res) => {
+  try {
+    const ride = await Ride.findById(req.params.id);
+    ride.status = "IN_PROGRESS";
+
+    await ride.save();
+
+    req.app.get("io")?.emit("ride:update", ride);
+
+    res.json(ride);
+  } catch {
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ================= COMPLETE =================
+exports.completeRide = async (req, res) => {
+  try {
+    const ride = await Ride.findById(req.params.id);
+    ride.status = "COMPLETED";
+
+    await ride.save();
+
+    req.app.get("io")?.emit("ride:update", ride);
+    req.app.get("io")?.emit("ride-completed", { rideId: ride._id });
+
+    res.json(ride);
+  } catch {
+    res.status(500).json({ error: "Server error" });
   }
 };
 
 // ================= GET RIDES =================
 exports.getRides = async (req, res) => {
-  try {
-    const rides = await Ride.find().sort({ createdAt: -1 });
-    res.json(rides);
-  } catch (err) {
-    console.log("getRides error:", err);
-    res.status(500).json({ error: err.message });
-  }
+  const rides = await Ride.find().sort({ createdAt: -1 });
+  res.json(rides);
 };
