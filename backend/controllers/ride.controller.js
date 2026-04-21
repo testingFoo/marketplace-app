@@ -36,23 +36,47 @@ exports.createRide = async (req, res) => {
 // ================= ACCEPT RIDE =================
 exports.acceptRide = async (req, res) => {
   try {
-    const ride = await Ride.findById(req.params.id);
+    const { driverId } = req.body;
+    const rideId = req.params.id;
+
+    const ride = await Ride.findById(rideId);
     if (!ride) return res.status(404).json({ error: "Ride not found" });
 
-    if (ride.status !== "REQUESTED") {
-      return res.status(400).json({ error: "Already taken" });
+    ride.status = "DRIVER_ARRIVING"; // 🔥 FIX
+    ride.driverId = driverId;
+
+    let coords = await getRoute(
+      ride.originCoords,
+      ride.destinationCoords
+    );
+
+    if (!coords) {
+      coords = [
+        [ride.originCoords.lng, ride.originCoords.lat],
+        [ride.destinationCoords.lng, ride.destinationCoords.lat]
+      ];
     }
 
-    ride.status = "ACCEPTED";
-    ride.driverId = req.body.driverId;
+    ride.routeCoords = coords;
 
     await ride.save();
 
     const io = req.app.get("io");
-    io?.emit("ride:update", ride);
 
-    res.json(ride);
+    startDriverMovement(io, ride._id, coords);
+
+    io.emit("ride:update", {
+      ...ride.toObject(),
+      routeCoords: coords
+    });
+
+    res.json({
+      ...ride.toObject(),
+      routeCoords: coords
+    });
+
   } catch (err) {
+    console.log("acceptRide error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
