@@ -31,22 +31,19 @@ function initSocket() {
   });
 
 socket.on("driver-location-update", (data) => {
-  const { location, etaSeconds } = data;
+  const { location } = data;
 
   if (!location) return;
 
-  const newLatLng = [location.lat, location.lng];
+  const newLatLng = { lat: location.lat, lng: location.lng };
 
-  // 🔥 CREATE IF NOT EXISTS
   if (!driverMarker) {
-    driverMarker = L.marker(newLatLng).addTo(map);
-    map.setView(newLatLng, 15);
+    driverMarker = L.marker([location.lat, location.lng]).addTo(map);
   } else {
-    // 🔥 SMOOTH MOVE (ANIMATION)
-    driverMarker.setLatLng(newLatLng);
+    driverMarker.setLatLng([location.lat, location.lng]);
   }
 
-  updateETA(Math.round((etaSeconds || 0) / 60));
+  map.panTo([location.lat, location.lng], { animate: true, duration: 0.5 });
 });
 
   socket.on("ride-completed", () => {
@@ -117,6 +114,10 @@ async function search(q) {
     console.log("Mapbox error:", err);
     return [];
   }
+}
+
+function getBearing(a, b) {
+  return (Math.atan2(b.lng - a.lng, b.lat - a.lat) * 180) / Math.PI;
 }
 
 // ================= AUTOCOMPLETE =================
