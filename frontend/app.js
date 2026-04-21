@@ -30,19 +30,24 @@ function initSocket() {
     }
   });
 
-  socket.on("driver-location-update", (data) => {
-    const { location, etaSeconds } = data;
+socket.on("driver-location-update", (data) => {
+  const { location, etaSeconds } = data;
 
-    if (!location) return;
+  if (!location) return;
 
-    if (!driverMarker) {
-      driverMarker = L.marker([location.lat, location.lng]).addTo(map);
-    } else {
-      driverMarker.setLatLng([location.lat, location.lng]);
-    }
+  const newLatLng = [location.lat, location.lng];
 
-    updateETA(Math.round((etaSeconds || 0) / 60));
-  });
+  // 🔥 CREATE IF NOT EXISTS
+  if (!driverMarker) {
+    driverMarker = L.marker(newLatLng).addTo(map);
+    map.setView(newLatLng, 15);
+  } else {
+    // 🔥 SMOOTH MOVE (ANIMATION)
+    driverMarker.setLatLng(newLatLng);
+  }
+
+  updateETA(Math.round((etaSeconds || 0) / 60));
+});
 
   socket.on("ride-completed", () => {
     alert("Ride completed ✅");
