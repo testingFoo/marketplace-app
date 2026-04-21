@@ -108,7 +108,7 @@ exports.acceptRide = async (req, res) => {
       driver = await Driver.findOne({ userId: driverId });
     }
 
-    ride.status = "ACCEPTED";
+    ride.status = "DRIVER_ARRIVING";
     ride.driverId = driver?._id || null;
 
     let coords = await getRoute(ride.originCoords, ride.destinationCoords);
