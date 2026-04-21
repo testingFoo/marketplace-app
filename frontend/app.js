@@ -103,10 +103,14 @@ function initMap() {
 
 // ================= ICON =================
 function carIcon() {
-  return L.icon({
-    iconUrl: "https://cdn-icons-png.flaticon.com/512/744/744465.png",
-    iconSize: [35, 35],
-    iconAnchor: [17, 17]
+  return L.divIcon({
+    className: "car-icon",
+    html: `
+      <img src="https://tb-static.uber.com/prod/udam-assets/21a3bbd1-7433-4328-b610-31adb4c09e0a.svg"
+           style="width:40px;height:40px;transform:rotate(0deg);" />
+    `,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20]
   });
 }
 
