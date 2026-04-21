@@ -1,24 +1,58 @@
 const Ride = require("../models/Ride");
 const Driver = require("../models/Driver");
 
+// ================= RANDOM START NEAR PICKUP =================
+function randomNear(coord) {
+  const offset = () => (Math.random() - 0.5) * 0.02; // ~1–2 km radius
+
+  return {
+    lat: coord.lat + offset(),
+    lng: coord.lng + offset()
+  };
+}
+
+// ================= INTERPOLATION =================
 function interpolate(a, b, t) {
   return a + (b - a) * t;
 }
 
-function startDriverMovement(io, rideId, coords) {
+// ================= MAIN MOVEMENT =================
+async function startDriverMovement(io, rideId, coords) {
   if (!coords || coords.length < 2) return;
+
+  const ride = await Ride.findById(rideId);
+  if (!ride) return;
+
+  let driver = null;
+
+  if (ride.driverId) {
+    driver = await Driver.findById(ride.driverId);
+  }
+
+  // 🔥 FIX: ensure driver has starting location
+  if (!driver?.location) {
+    const start = randomNear(ride.originCoords);
+
+    if (driver) {
+      await Driver.findByIdAndUpdate(driver._id, {
+        location: start
+      });
+    }
+
+    // inject starting point into route
+    coords.unshift([start.lng, start.lat]);
+  }
 
   let index = 0;
   let progress = 0;
-
   let lastDbUpdate = Date.now();
 
   const stepSpeed = 0.02;
 
   const interval = setInterval(async () => {
     try {
-
       const [start, end] = [coords[index], coords[index + 1]];
+
       if (!start || !end) {
         clearInterval(interval);
         return;
@@ -30,13 +64,34 @@ function startDriverMovement(io, rideId, coords) {
         progress = 0;
         index++;
 
+        // 🔥 ARRIVED AT PICKUP
+        if (index === 2) {
+          await Ride.findByIdAndUpdate(rideId, {
+            status: "IN_PROGRESS"
+          });
+
+          io.emit("ride:update", {
+            _id: rideId,
+            status: "IN_PROGRESS"
+          });
+        }
+
+        // 🔥 FINISHED RIDE
         if (index >= coords.length - 1) {
           await Ride.findByIdAndUpdate(rideId, {
             status: "COMPLETED"
           });
 
-          clearInterval(interval);
+          if (driver) {
+            await Driver.findByIdAndUpdate(driver._id, {
+              available: true,
+              status: "IDLE"
+            });
+          }
+
           io.emit("ride-completed", { rideId });
+
+          clearInterval(interval);
           return;
         }
       }
@@ -46,15 +101,11 @@ function startDriverMovement(io, rideId, coords) {
 
       const now = Date.now();
 
-      // 🔥 ONLY WRITE TO DB EVERY 1 SECOND
-      if (now - lastDbUpdate > 1000) {
-        const ride = await Ride.findById(rideId);
-
-        if (ride?.driverId) {
-          await Driver.findByIdAndUpdate(ride.driverId, {
-            location: { lat, lng }
-          });
-        }
+      // 🔥 reduce Mongo spam
+      if (now - lastDbUpdate > 1000 && driver) {
+        await Driver.findByIdAndUpdate(driver._id, {
+          location: { lat, lng }
+        });
 
         lastDbUpdate = now;
       }
