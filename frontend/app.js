@@ -6,58 +6,71 @@ let map;
 
 let origin = null;
 let destination = null;
+
 let driverMarker = null;
 let routeLine = null;
 
-let activeTab = "passenger";
+let pickupMarker = null;
+let dropMarker = null;
+
+let activeRide = null;
+
+// ================= INIT =================
+window.onload = () => {
+  initMap();
+  initSocket();
+  setupSearch("origin");
+  setupSearch("destination");
+  loadRides();
+};
 
 // ================= SOCKET =================
 function initSocket() {
   socket = io(API);
 
   socket.on("connect", () => {
-    console.log("Connected to server");
+    console.log("Connected");
   });
 
   socket.on("ride:new", loadRides);
-
-  // ✅ UPDATED
   socket.on("ride:update", (ride) => {
     loadRides();
+    activeRide = ride;
 
-    if (ride.routeCoords) {
-      drawRoute(ride.routeCoords);
-    }
+    if (ride.routeCoords) drawRoute(ride.routeCoords);
+    drawTripMarkers(ride);
   });
 
-socket.on("driver-location-update", (data) => {
-  const { location } = data;
+  socket.on("driver-location-update", (data) => {
+    const { location, etaSeconds } = data;
 
-  if (!location) return;
+    if (!location) return;
 
-  const newLatLng = { lat: location.lat, lng: location.lng };
+    const latlng = [location.lat, location.lng];
 
-  if (!driverMarker) {
-    driverMarker = L.marker([location.lat, location.lng]).addTo(map);
-  } else {
-    driverMarker.setLatLng([location.lat, location.lng]);
-  }
+    if (!driverMarker) {
+      driverMarker = L.marker(latlng, { icon: carIcon() }).addTo(map);
+    } else {
+      driverMarker.setLatLng(latlng);
+    }
 
-  map.panTo([location.lat, location.lng], { animate: true, duration: 0.5 });
-});
+    map.panTo(latlng, { animate: true, duration: 0.5 });
+
+    updateETA(Math.round((etaSeconds || 0) / 60));
+    updateUberUI("EN_ROUTE", etaSeconds);
+  });
 
   socket.on("ride-completed", () => {
-    alert("Ride completed ✅");
+    alert("Ride completed");
 
-    if (driverMarker) {
-      map.removeLayer(driverMarker);
-      driverMarker = null;
-    }
+    if (driverMarker) map.removeLayer(driverMarker);
+    driverMarker = null;
 
-    if (routeLine) {
-      map.removeLayer(routeLine);
-      routeLine = null;
-    }
+    if (routeLine) map.removeLayer(routeLine);
+    routeLine = null;
+
+    clearTripMarkers();
+    updateUberUI("COMPLETED", 0);
   });
 }
 
@@ -70,62 +83,69 @@ function initMap() {
   }).addTo(map);
 }
 
-// ================= DRAW ROUTE =================
-function drawRoute(coords) {
-  if (!coords || coords.length === 0) return;
+// ================= CAR ICON =================
+function carIcon() {
+  return L.icon({
+    iconUrl: "https://cdn-icons-png.flaticon.com/512/744/744465.png",
+    iconSize: [35, 35],
+    iconAnchor: [17, 17]
+  });
+}
 
-  if (routeLine) {
-    map.removeLayer(routeLine);
-  }
+// ================= ROUTE =================
+function drawRoute(coords) {
+  if (!coords) return;
+
+  if (routeLine) map.removeLayer(routeLine);
 
   routeLine = L.polyline(
     coords.map(c => [c[1], c[0]]),
-    {
-      color: "blue",
-      weight: 4
-    }
+    { color: "blue", weight: 4 }
   ).addTo(map);
 
   map.fitBounds(routeLine.getBounds());
 }
 
-// ================= TAB =================
-function setTab(t) {
-  activeTab = t;
+// ================= MARKERS =================
+function drawTripMarkers(ride) {
+  if (!ride) return;
 
-  document.querySelectorAll(".section").forEach(el => {
-    el.classList.remove("active");
-  });
+  clearTripMarkers();
 
-  const active = document.getElementById(t);
-  if (active) active.classList.add("active");
-}
+  if (ride.originCoords) {
+    pickupMarker = L.marker(
+      [ride.originCoords.lat, ride.originCoords.lng]
+    ).addTo(map).bindPopup("📍 Pickup");
+  }
 
-// ================= MAPBOX SEARCH =================
-async function search(q) {
-  try {
-    const res = await fetch(
-      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${MAPBOX_TOKEN}`
-    );
-
-    const data = await res.json();
-    return data.features || [];
-  } catch (err) {
-    console.log("Mapbox error:", err);
-    return [];
+  if (ride.destinationCoords) {
+    dropMarker = L.marker(
+      [ride.destinationCoords.lat, ride.destinationCoords.lng]
+    ).addTo(map).bindPopup("🏁 Dropoff");
   }
 }
 
-function getBearing(a, b) {
-  return (Math.atan2(b.lng - a.lng, b.lat - a.lat) * 180) / Math.PI;
+function clearTripMarkers() {
+  if (pickupMarker) map.removeLayer(pickupMarker);
+  if (dropMarker) map.removeLayer(dropMarker);
+
+  pickupMarker = null;
+  dropMarker = null;
 }
 
-// ================= AUTOCOMPLETE =================
+// ================= SEARCH =================
+async function search(q) {
+  const res = await fetch(
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${MAPBOX_TOKEN}`
+  );
+
+  const data = await res.json();
+  return data.features || [];
+}
+
 function setupSearch(id) {
   const input = document.getElementById(id);
   const box = document.getElementById(id + "List");
-
-  if (!input || !box) return;
 
   let timeout;
 
@@ -133,10 +153,7 @@ function setupSearch(id) {
     clearTimeout(timeout);
 
     timeout = setTimeout(async () => {
-      if (input.value.length < 3) {
-        box.innerHTML = "";
-        return;
-      }
+      if (input.value.length < 3) return;
 
       const res = await search(input.value);
       box.innerHTML = "";
@@ -157,7 +174,6 @@ function setupSearch(id) {
           else destination = c;
 
           box.innerHTML = "";
-
           L.marker([c.lat, c.lng]).addTo(map);
         };
 
@@ -168,10 +184,10 @@ function setupSearch(id) {
   });
 }
 
-// ================= SUBMIT RIDE =================
+// ================= SUBMIT =================
 function submitRide() {
   if (!origin || !destination) {
-    alert("Select origin and destination");
+    alert("Select origin & destination");
     return;
   }
 
@@ -179,61 +195,36 @@ function submitRide() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      userId: "demo-user",
-
-      type:
-        activeTab === "passenger"
-          ? "UBERX"
-          : activeTab === "parcel"
-            ? "VAN"
-            : "FREIGHT",
-
+      type: "UBERX",
       originCoords: origin,
       destinationCoords: destination
     })
   })
-    .then(async (res) => {
-      const data = await res.json();
-
-      if (!res.ok) {
-        console.log("❌ Backend error:", data);
-        alert(data.error || "Server error");
-        return;
-      }
-
-      console.log("✅ Ride created:", data);
-      loadRides();
-    })
-    .catch(err => console.log("Submit error:", err));
+  .then(r => r.json())
+  .then(data => {
+    console.log("Ride:", data);
+    loadRides();
+  });
 }
 
-window.submitRide = submitRide;
-window.setTab = setTab;
-
-// ================= LOAD RIDES =================
+// ================= LOAD =================
 function loadRides() {
   fetch(`${API}/api/rides`)
     .then(r => r.json())
-    .then(data => {
-      if (!Array.isArray(data)) return;
-      render(data);
-    })
-    .catch(err => console.log("Load rides error:", err));
+    .then(render);
 }
 
 // ================= RENDER =================
 function render(rides) {
   const list = document.getElementById("rides");
-  if (!list) return;
-
   list.innerHTML = "";
 
   rides.forEach(r => {
     list.innerHTML += `
       <div class="card">
-        <b>${r.type || "UNKNOWN"}</b><br/>
-        Status: ${r.status || "-"}<br/>
-        Driver: ${r.driverId || "OPEN"}<br/>
+        <b>${r.type}</b><br/>
+        ${r.origin || "-"} → ${r.destination || "-"}<br/>
+        Status: ${r.status}<br/>
         Fare: $${r.fare || 0}
       </div>
     `;
@@ -250,21 +241,48 @@ function updateETA(mins) {
     el.style.position = "fixed";
     el.style.bottom = "10px";
     el.style.right = "10px";
-    el.style.background = "black";
-    el.style.color = "white";
+    el.style.background = "#000";
+    el.style.color = "#0f0";
     el.style.padding = "10px";
-    el.style.zIndex = "9999";
+    el.style.zIndex = 9999;
     document.body.appendChild(el);
   }
 
-  el.innerText = `Driver arriving in ${mins} min`;
+  el.innerText = `ETA: ${mins} min`;
 }
 
-// ================= INIT =================
-window.onload = () => {
-  initMap();
-  initSocket();
-  setupSearch("origin");
-  setupSearch("destination");
-  loadRides();
-};
+// ================= UBER UI =================
+function updateUberUI(status, eta) {
+  let ui = document.getElementById("uberUI");
+
+  if (!ui) {
+    ui = document.createElement("div");
+    ui.id = "uberUI";
+    ui.style.position = "fixed";
+    ui.style.bottom = "0";
+    ui.style.left = "0";
+    ui.style.width = "100%";
+    ui.style.background = "#111";
+    ui.style.color = "white";
+    ui.style.padding = "15px";
+    ui.style.zIndex = 9999;
+    document.body.appendChild(ui);
+  }
+
+  let text = "";
+
+  if (status === "EN_ROUTE") {
+    text = `🚗 Driver arriving in ${Math.round((eta || 0) / 60)} min`;
+  } else if (status === "COMPLETED") {
+    text = "✅ Ride completed";
+  } else {
+    text = "🟡 Waiting for driver...";
+  }
+
+  ui.innerHTML = `
+    <div style="font-size:16px;font-weight:bold">${text}</div>
+    <div style="height:6px;background:#333;margin-top:10px">
+      <div style="height:6px;background:lime;width:${Math.min(100, (eta || 0) / 3)}%"></div>
+    </div>
+  `;
+}
