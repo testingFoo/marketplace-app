@@ -2,10 +2,7 @@ const mongoose = require("mongoose");
 
 const RideSchema = new mongoose.Schema(
   {
-    userId: {
-      type: String,
-      required: true
-    },
+    userId: { type: String, required: true },
 
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -21,15 +18,14 @@ const RideSchema = new mongoose.Schema(
 
     status: {
       type: String,
-     enum: [
-    "REQUESTED",
-    "ACCEPTED",
-    "DRIVER_ARRIVING",
-    "DRIVER_ARRIVED",
-    "IN_PROGRESS",
-    "COMPLETED",
-    "CANCELLED"
-  ],
+      enum: [
+        "REQUESTED",
+        "ACCEPTED",
+        "DRIVER_ARRIVED",
+        "IN_PROGRESS",
+        "COMPLETED",
+        "CANCELLED"
+      ],
       default: "REQUESTED"
     },
 
@@ -43,24 +39,9 @@ const RideSchema = new mongoose.Schema(
       lat: { type: Number, required: true }
     },
 
-    fare: {
-      type: Number,
-      default: 0
-    },
-
-    distance: {
-      type: Number,
-      default: 0
-    },
-
-    duration: {
-      type: Number,
-      default: 0
-    }
+    fare: { type: Number, default: 0 }
   },
-  {
-    timestamps: true
-  }
+  { timestamps: true }
 );
 
 module.exports = mongoose.model("Ride", RideSchema);
