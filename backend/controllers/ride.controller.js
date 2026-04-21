@@ -3,22 +3,27 @@ const Driver = require("../models/Driver");
 const dispatch = require("../services/dispatch.service");
 const { startDriverMovement } = require("../sockets/driverMovement");
 
-// ✅ SAFE FETCH (works on all Node versions)
+// ✅ SAFE FETCH (no node-fetch install needed)
 let fetchFn;
-
 try {
-  fetchFn = fetch; // Node 18+
+  fetchFn = fetch;
 } catch {
-  fetchFn = (...args) => import("node-fetch").then(({ default: f }) => f(...args));
+  fetchFn = (...args) =>
+    import("node-fetch").then(({ default: f }) => f(...args));
 }
 
-
+// ================= RANDOM DRIVER START =================
+function randomNear(coord) {
+  const offset = () => (Math.random() - 0.5) * 0.02; // ~2km
+  return {
+    lng: coord.lng + offset(),
+    lat: coord.lat + offset()
+  };
+}
 
 // ================= GET MAPBOX ROUTE =================
 async function getRoute(origin, destination) {
   try {
-    if (!origin || !destination) return null;
-
     const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?geometries=geojson&access_token=${process.env.MAPBOX_TOKEN}`;
 
     const res = await fetchFn(url);
@@ -37,8 +42,6 @@ async function getRoute(origin, destination) {
 // ================= CREATE RIDE =================
 exports.createRide = async (req, res) => {
   try {
-    console.log("🔥 CREATE RIDE BODY:", req.body);
-
     const {
       type = "UBERX",
       originCoords,
@@ -46,13 +49,8 @@ exports.createRide = async (req, res) => {
       userId
     } = req.body;
 
-    // ✅ HARD VALIDATION
-    if (!originCoords || !destinationCoords) {
-      return res.status(400).json({ error: "Missing coordinates" });
-    }
-
-    if (!userId) {
-      return res.status(400).json({ error: "Missing userId" });
+    if (!originCoords || !destinationCoords || !userId) {
+      return res.status(400).json({ error: "Missing required fields" });
     }
 
     const normalizedOrigin = Array.isArray(originCoords)
@@ -68,7 +66,7 @@ exports.createRide = async (req, res) => {
     }
 
     const ride = await Ride.create({
-      userId, // ✅ FIX
+      userId,
       type,
       originCoords: normalizedOrigin,
       destinationCoords,
@@ -88,7 +86,7 @@ exports.createRide = async (req, res) => {
     res.json(ride);
 
   } catch (err) {
-    console.log("🔥 CREATE RIDE ERROR:", err);
+    console.log("CREATE RIDE ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -102,7 +100,6 @@ exports.acceptRide = async (req, res) => {
     const ride = await Ride.findById(rideId);
     if (!ride) return res.status(404).json({ error: "Ride not found" });
 
-    // ✅ SAFE DRIVER (string OR objectId)
     let driver = null;
 
     try {
@@ -116,33 +113,39 @@ exports.acceptRide = async (req, res) => {
 
     let coords = await getRoute(ride.originCoords, ride.destinationCoords);
 
+    // fallback route
     if (!coords || coords.length < 2) {
-  console.log("⚠️ NO ROUTE → USING STRAIGHT LINE");
+      coords = [
+        [ride.originCoords.lng, ride.originCoords.lat],
+        [ride.destinationCoords.lng, ride.destinationCoords.lat]
+      ];
+    }
 
-  coords = [
-    [ride.originCoords.lng, ride.originCoords.lat],
-    [ride.destinationCoords.lng, ride.destinationCoords.lat]
-  ];
-}
+    // ✅ DRIVER START NEAR PICKUP
+    const start = randomNear(ride.originCoords);
 
-console.log("✅ ROUTE LENGTH:", coords.length);
-    ride.routeCoords = coords;
+    const fullRoute = [
+      [start.lng, start.lat], // driver start
+      ...coords              // pickup → destination
+    ];
+
+    ride.routeCoords = fullRoute;
     await ride.save();
 
     const io = req.app.get("io");
 
-    startDriverMovement(io, ride._id, coords);
+    startDriverMovement(io, ride._id, fullRoute);
 
     if (io) {
       io.emit("ride:update", {
         ...ride.toObject(),
-        routeCoords: coords
+        routeCoords: fullRoute
       });
     }
 
     res.json({
       ...ride.toObject(),
-      routeCoords: coords
+      routeCoords: fullRoute
     });
 
   } catch (err) {
