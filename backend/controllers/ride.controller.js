@@ -2,7 +2,17 @@ const Ride = require("../models/Ride");
 const Driver = require("../models/Driver");
 const dispatch = require("../services/dispatch.service");
 const { startDriverMovement } = require("../sockets/driverMovement");
-const fetch = require("node-fetch"); // ✅ FIX
+
+// ✅ SAFE FETCH (works on all Node versions)
+let fetchFn;
+
+try {
+  fetchFn = fetch; // Node 18+
+} catch {
+  fetchFn = (...args) => import("node-fetch").then(({ default: f }) => f(...args));
+}
+
+
 
 // ================= GET MAPBOX ROUTE =================
 async function getRoute(origin, destination) {
@@ -11,7 +21,7 @@ async function getRoute(origin, destination) {
 
     const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?geometries=geojson&access_token=${process.env.MAPBOX_TOKEN}`;
 
-    const res = await fetch(url);
+    const res = await fetchFn(url);
     const data = await res.json();
 
     if (!data.routes || data.routes.length === 0) return null;
