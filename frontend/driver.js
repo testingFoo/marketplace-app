@@ -1,4 +1,4 @@
-const API = "https://marketplace-app-m8ac.onrender.com";
+const API = "https://marketplace-app-m8ac.onrender.com/api";
 const socket = io(API);
 
 let driverId = localStorage.getItem("driverId");
