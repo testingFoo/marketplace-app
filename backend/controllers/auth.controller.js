@@ -10,19 +10,24 @@ exports.register = async (req, res) => {
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ error: "User exists" });
 
-    const hashed = await bcrypt.hash(password, 10);
+  const hashed = await bcrypt.hash(req.body.password, 10);
 
     const user = await User.create({
-      email,
+      email: req.body.email,
       password: hashed,
-      name
+
+      // NEW FIELDS (optional safe)
+      dob: req.body.dob || null,
+      sex: req.body.sex || null,
+      education: req.body.education || null,
+      currentCity: req.body.currentCity || null,
+      bornCity: req.body.bornCity || null,
+
+      social: req.body.social || {},
+      business: req.body.business || {}
     });
 
-    res.json({
-      id: user._id,
-      email: user.email,
-      name: user.name
-    });
+    res.json(user);
 
   } catch (err) {
     console.log("REGISTER ERROR:", err);
