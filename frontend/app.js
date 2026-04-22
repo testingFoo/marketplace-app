@@ -1,7 +1,7 @@
-const API = "https://marketplace-app-m8ac.onrender.com";
+
+const API = "https://marketplace-app-m8ac.onrender.com/api";
 
 const App = {
-
   openRide() {
     window.location.href = "/rider.html";
   },
@@ -10,6 +10,7 @@ const App = {
     window.location.href = "/driver.html";
   }
 };
+
 
 // ================= AUTH =================
 
@@ -24,7 +25,15 @@ async function register() {
   });
 
   const data = await res.json();
-  console.log(data);
+
+  if (!res.ok) {
+    console.log("REGISTER ERROR:", data);
+    alert(data.error || "Register failed");
+    return;
+  }
+
+  console.log("REGISTER OK:", data);
+  alert("Registered successfully");
 }
 
 async function login() {
@@ -39,6 +48,14 @@ async function login() {
 
   const data = await res.json();
 
+  if (!res.ok) {
+    console.log("LOGIN ERROR:", data);
+    alert(data.error || "Login failed");
+    return;
+  }
+
   document.getElementById("userBox").innerText =
-    data.user ? "Logged in: " + data.user.email : "Login failed";
+    "Logged in: " + data.user.email;
+
+  console.log("LOGIN OK:", data);
 }
