@@ -13,34 +13,33 @@ const App = {
 
 
 // ================= AUTH =================
-
+// ================= REGISTER =================
 async function register() {
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
 
-  const res = await fetch(`${API}/auth/register`, {
+  const res = await fetch(`${API}/api/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password })
   });
 
   const data = await res.json();
+  console.log(data);
 
-  if (!res.ok) {
-    console.log("REGISTER ERROR:", data);
+  if (res.ok) {
+    alert("Registered! Now login.");
+  } else {
     alert(data.error || "Register failed");
-    return;
   }
-
-  console.log("REGISTER OK:", data);
-  alert("Registered successfully");
 }
 
+// ================= LOGIN =================
 async function login() {
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
 
-  const res = await fetch(`${API}/auth/login`, {
+  const res = await fetch(`${API}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password })
@@ -49,13 +48,14 @@ async function login() {
   const data = await res.json();
 
   if (!res.ok) {
-    console.log("LOGIN ERROR:", data);
     alert(data.error || "Login failed");
     return;
   }
 
-  document.getElementById("userBox").innerText =
-    "Logged in: " + data.user.email;
+  // 🔥 SAVE TOKEN + USER
+  localStorage.setItem("token", data.token);
+  localStorage.setItem("user", JSON.stringify(data.user));
 
-  console.log("LOGIN OK:", data);
+  // 🔥 REDIRECT TO PROFILE
+  window.location.href = "/profile.html";
 }
