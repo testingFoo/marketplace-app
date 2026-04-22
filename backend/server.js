@@ -15,7 +15,7 @@ const driverRoutes = require("./routes/driver.routes");
 
 const app = express();
 app.use(express.static("public"));
-
+app.use(passport.initialize());
 // ================= MIDDLEWARE =================
 app.use(cors());
 app.use(express.json());
