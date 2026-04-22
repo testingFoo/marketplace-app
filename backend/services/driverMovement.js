@@ -14,17 +14,16 @@ function interpolate(a, b, t) {
   return a + (b - a) * t;
 }
 
+// 🔥 UPDATED FUNCTION
 function startDriverMovement(io, rideId, routeCoords, skipToTrip = false) {
-  if (!Array.isArray(routeCoords) || routeCoords.length < 2) {
-    console.log("❌ Invalid routeCoords");
-    return;
-  }
+  if (!routeCoords || routeCoords.length < 2) return;
 
   let index = 0;
   let progress = 0;
-  let phase = skipToTrip ? "TRIP" : "TO_PICKUP";
-
   let lastDbUpdate = Date.now();
+  const stepSpeed = 0.02;
+
+  let phase = skipToTrip ? "TRIP" : "TO_PICKUP";
 
   let current = randomNear({
     lat: routeCoords[0][1],
@@ -32,57 +31,43 @@ function startDriverMovement(io, rideId, routeCoords, skipToTrip = false) {
   });
 
   const interval = setInterval(async () => {
-
-   
-    
     try {
       const ride = await Ride.findById(rideId);
       if (!ride) return clearInterval(interval);
 
-      let target;
-
-      // ================= TO PICKUP =================
-      if (phase === "PAUSED") return;
+      // ================= PICKUP =================
       if (phase === "TO_PICKUP") {
-        target = {
+        const target = {
           lat: routeCoords[0][1],
           lng: routeCoords[0][0]
         };
 
-        current.lat = interpolate(current.lat, target.lat, 0.02);
-        current.lng = interpolate(current.lng, target.lng, 0.02);
+        current.lat = interpolate(current.lat, target.lat, stepSpeed);
+        current.lng = interpolate(current.lng, target.lng, stepSpeed);
 
         const dist =
           Math.abs(current.lat - target.lat) +
           Math.abs(current.lng - target.lng);
 
         if (dist < 0.0003) {
-          ride.status = "IN_PROGRESS";
-          await ride.save();
-
-          io.emit("ride:update", ride);
-
-          phase = "TRIP";
-          index = 0;
-          progress = 0;
+          phase = "PAUSED";
         }
       }
 
       // ================= TRIP =================
-      else {
+      else if (phase === "TRIP") {
         const start = routeCoords[index];
         const end = routeCoords[index + 1];
 
         if (!start || !end) {
-          ride.status = "COMPLETED";
-          await ride.save();
+          await Ride.findByIdAndUpdate(rideId, { status: "COMPLETED" });
 
           io.emit("ride-completed", { rideId });
           clearInterval(interval);
           return;
         }
 
-        progress += 0.02;
+        progress += stepSpeed;
 
         if (progress >= 1) {
           progress = 0;
@@ -93,28 +78,33 @@ function startDriverMovement(io, rideId, routeCoords, skipToTrip = false) {
         current.lat = interpolate(start[1], end[1], progress);
       }
 
-      // ================= DB UPDATE =================
-      if (Date.now() - lastDbUpdate > 1000 && ride.driverId) {
+      // ================= DB =================
+      const now = Date.now();
+
+      if (now - lastDbUpdate > 1000 && ride.driverId) {
         await Driver.findByIdAndUpdate(ride.driverId, {
           location: current
         });
 
-        lastDbUpdate = Date.now();
+        lastDbUpdate = now;
       }
 
-      // ================= SOCKET =================
+      const etaSeconds = Math.round(
+        ((routeCoords.length - index) / routeCoords.length) * 300
+      );
+
       io.emit("driver-location-update", {
         rideId,
         location: current,
-        etaSeconds: Math.max(10, (routeCoords.length - index) * 12),
+        etaSeconds,
         phase
       });
 
     } catch (err) {
-      console.log("🔥 Movement error:", err);
+      console.log("Movement error:", err);
       clearInterval(interval);
     }
-  }, 1000);
+  }, 80);
 }
 
 module.exports = { startDriverMovement };
