@@ -9,14 +9,22 @@ async function getRoute(origin, destination) {
     const res = await fetch(url);
     const data = await res.json();
 
-    if (!data.routes || data.routes.length === 0) return null;
+    // ✅ SUCCESS CASE
+    if (data.routes && data.routes.length > 0) {
+      return data.routes[0].geometry.coordinates;
+    }
 
-    return data.routes[0].geometry.coordinates;
+    console.log("⚠️ Mapbox returned no routes");
 
   } catch (err) {
-    console.log("Route fetch error:", err);
-    return null;
+    console.log("❌ Mapbox failed:", err.message);
   }
+
+  // 🔥 FALLBACK (ALWAYS WORKS)
+  return [
+    [origin.lng, origin.lat],
+    [destination.lng, destination.lat]
+  ];
 }
 
 // ================= CREATE =================
