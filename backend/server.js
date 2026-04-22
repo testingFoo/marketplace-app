@@ -1,6 +1,7 @@
 const express = require("express");
 const http = require("http");
 
+
 const cors = require("cors");
 const mongoose = require("mongoose");
 const { Server } = require("socket.io");
@@ -10,6 +11,7 @@ const passport = require("passport");
 const rideRoutes = require("./routes/ride.routes");
 const authRoutes = require("./routes/auth.routes");
 const driverRoutes = require("./routes/driver.routes");
+const profileRoutes = require("./routes/profile.routes");
 
 
 
@@ -31,6 +33,7 @@ app.use((req, res, next) => {
 app.use("/api/rides", rideRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/driver", driverRoutes);
+app.use("/api/profile", profileRoutes);
 
 // ================= HTTP SERVER =================
 const server = http.createServer(app);
