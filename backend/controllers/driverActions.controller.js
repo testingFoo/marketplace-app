@@ -5,6 +5,8 @@ const { startDriverMovement } = require("../services/driverMovement");
 exports.startToPickup = async (req, res) => {
   const ride = await Ride.findById(req.params.id);
 
+  if (!ride) return res.status(404).json({ error: "Ride not found" });
+
   ride.status = "EN_ROUTE_TO_PICKUP";
   await ride.save();
 
@@ -21,6 +23,8 @@ exports.startToPickup = async (req, res) => {
 exports.arrived = async (req, res) => {
   const ride = await Ride.findById(req.params.id);
 
+  if (!ride) return res.status(404).json({ error: "Ride not found" });
+
   ride.status = "AT_PICKUP";
   await ride.save();
 
@@ -33,6 +37,8 @@ exports.arrived = async (req, res) => {
 // START TRIP
 exports.startTrip = async (req, res) => {
   const ride = await Ride.findById(req.params.id);
+
+  if (!ride) return res.status(404).json({ error: "Ride not found" });
 
   ride.status = "IN_PROGRESS";
   await ride.save();
