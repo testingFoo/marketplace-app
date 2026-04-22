@@ -1,4 +1,3 @@
-// models/User.js
 const mongoose = require("mongoose");
 
 const UserSchema = new mongoose.Schema({
@@ -7,9 +6,12 @@ const UserSchema = new mongoose.Schema({
 
   name: String,
 
+  // 🔥 SUPER APP FIELDS
+  walletBalance: { type: Number, default: 0 },
+
   roles: {
-    type: [String],
-    default: ["USER"] // can add DRIVER, BUSINESS_OWNER later
+    driver: { type: Boolean, default: false },
+    business: { type: Boolean, default: false }
   },
 
   createdAt: {
