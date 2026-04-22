@@ -1,13 +1,11 @@
 const express = require("express");
 const http = require("http");
-const session = require("express-session");
 
 const cors = require("cors");
 const mongoose = require("mongoose");
 const { Server } = require("socket.io");
 
 const passport = require("passport");
-require("./auth/passport")(passport);
 
 const rideRoutes = require("./routes/ride.routes");
 const authRoutes = require("./routes/auth.routes");
