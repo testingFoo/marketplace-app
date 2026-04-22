@@ -1,4 +1,4 @@
-const API = "/api";
+const API = "https://marketplace-app-m8ac.onrender.com";
 
 const App = {
 
