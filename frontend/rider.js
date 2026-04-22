@@ -1,4 +1,4 @@
-const API = "https://marketplace-app-m8ac.onrender.com";
+const API = "https://marketplace-app-m8ac.onrender.com/api";
 const MAPBOX_TOKEN = "pk.eyJ1IjoibWFwZnVycWFuIiwiYSI6ImNtbzRoMGdnbjEzZXkydnF3MWFhN2t5aWcifQ.A7GlM3WDlLWHBl6lQCHKEA";
 
 let socket;
