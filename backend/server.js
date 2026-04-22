@@ -7,7 +7,6 @@ const mongoose = require("mongoose");
 const { Server } = require("socket.io");
 
 const passport = require("./auth/passport");
-const authRoutes = require("./routes/auth.routes");
 const rideRoutes = require("./routes/ride.routes");
 const authRoutes = require("./routes/auth.routes");
 const driverRoutes = require("./routes/driver.routes");
