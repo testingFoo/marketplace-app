@@ -1,3 +1,6 @@
+
+  const API = "/api";
+
 const App = {
 
   openRide() {
@@ -8,7 +11,6 @@ const App = {
     window.location.href = "/driver.html";
   }
 
-  const API = "/api";
 
 async function register() {
   const email = document.getElementById("email").value;
