@@ -24,6 +24,7 @@ const RideSchema = new mongoose.Schema(
       enum: [
         "REQUESTED",
         "DRIVER_ARRIVING",
+        "WAITING_START",
         "IN_PROGRESS",
         "COMPLETED",
         "CANCELLED"
