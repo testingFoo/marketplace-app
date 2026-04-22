@@ -21,11 +21,7 @@ app.use(cors());
 app.use(express.json());
 app.use(passport.initialize());
 app.use(passport.session());
-app.use(session({
-  secret: "super-secret",
-  resave: false,
-  saveUninitialized: false
-}));
+
 
 
 // 🔥 REQUEST LOGGER
