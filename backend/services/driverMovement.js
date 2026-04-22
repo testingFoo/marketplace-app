@@ -14,7 +14,7 @@ function interpolate(a, b, t) {
   return a + (b - a) * t;
 }
 
-function startDriverMovement(io, rideId, routeCoords) {
+function startDriverMovement(io, rideId, routeCoords, skipToTrip = false) {
   if (!Array.isArray(routeCoords) || routeCoords.length < 2) {
     console.log("❌ Invalid routeCoords");
     return;
@@ -22,7 +22,7 @@ function startDriverMovement(io, rideId, routeCoords) {
 
   let index = 0;
   let progress = 0;
-  let phase = "TO_PICKUP";
+  let phase = skipToTrip ? "TRIP" : "TO_PICKUP";
 
   let lastDbUpdate = Date.now();
 
@@ -32,6 +32,9 @@ function startDriverMovement(io, rideId, routeCoords) {
   });
 
   const interval = setInterval(async () => {
+
+   
+    
     try {
       const ride = await Ride.findById(rideId);
       if (!ride) return clearInterval(interval);
@@ -39,6 +42,7 @@ function startDriverMovement(io, rideId, routeCoords) {
       let target;
 
       // ================= TO PICKUP =================
+      if (phase === "PAUSED") return;
       if (phase === "TO_PICKUP") {
         target = {
           lat: routeCoords[0][1],
