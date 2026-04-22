@@ -58,6 +58,7 @@
 <div class="container">
 
   <div class="sidebar">
+    
     <h2>Super App</h2>
 
     <button class="nav-btn" onclick="App.openRide()">🚗 Ride</button>
@@ -73,6 +74,17 @@
     <div class="card">
       ✔ Uber system isolated<br/>
       ✔ Ready for multi-modules
+      <div class="card">
+  <h3>Login</h3>
+
+  <input id="email" placeholder="Email"/>
+  <input id="password" type="password" placeholder="Password"/>
+
+  <button onclick="login()">Login</button>
+  <button onclick="register()">Register</button>
+
+  <div id="userBox"></div>
+</div>
     </div>
   </div>
 
