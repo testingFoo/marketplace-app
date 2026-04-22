@@ -1,5 +1,5 @@
 const Ride = require("../models/Ride");
-const { startDriverMovement } = require("../sockets/driverMovement");
+const { startDriverMovement } = require("../services/driverMovement");
 
 // START → GO TO PICKUP
 exports.startToPickup = async (req, res) => {
