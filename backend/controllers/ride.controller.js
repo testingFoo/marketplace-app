@@ -51,11 +51,18 @@ exports.acceptRide = async (req, res) => {
     const { driverId } = req.body;
     const rideId = req.params.id;
 
+    if (!driverId) {
+      return res.status(400).json({ error: "driverId required" });
+    }
+
     const ride = await Ride.findById(rideId);
     if (!ride) return res.status(404).json({ error: "Ride not found" });
 
+    const driver = await Driver.findById(driverId);
+    if (!driver) return res.status(404).json({ error: "Driver not found" });
+
+    ride.status = "DRIVER_ASSIGNED";
     ride.driverId = driverId;
-    ride.status = "DRIVER_ARRIVING";
 
     let coords = await getRoute(
       ride.originCoords,
@@ -70,23 +77,20 @@ exports.acceptRide = async (req, res) => {
     }
 
     ride.routeCoords = coords;
+
     await ride.save();
 
     const io = req.app.get("io");
 
-    console.log("MOVEMENT STARTING:", typeof startDriverMovement);
-
-    if (io && startDriverMovement) {
-      startDriverMovement(io, ride._id, coords);
+    if (io) {
+      io.emit("ride:update", ride);
     }
-
-    io?.emit("ride:update", ride);
 
     res.json(ride);
 
   } catch (err) {
-    console.log("🔥 ACCEPT ERROR:", err);
-    res.status(500).json({ error: err.message });
+    console.log("ACCEPT ERROR:", err);
+    res.status(500).json({ error: "Server error" });
   }
 };
 
