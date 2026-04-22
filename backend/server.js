@@ -6,10 +6,13 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const { Server } = require("socket.io");
 
-const passport = require("./auth/passport");
+const passport = require("passport");
+require("./auth/passport")(passport);
+
 const rideRoutes = require("./routes/ride.routes");
 const authRoutes = require("./routes/auth.routes");
 const driverRoutes = require("./routes/driver.routes");
+
 
 
 const app = express();
