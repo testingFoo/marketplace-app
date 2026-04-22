@@ -7,7 +7,7 @@ let driverMongoId = localStorage.getItem("driverMongoId");
 let online = false;
 let map;
 
-// ================= INIT =================
+// INIT
 window.onload = async () => {
   initMap();
   await ensureDriverExists();
@@ -15,45 +15,33 @@ window.onload = async () => {
   loadJobs();
 };
 
-// ================= SOCKET =================
-socket.on("connect", () => {
-  console.log("Driver connected:", socket.id);
-});
-
+// SOCKET
 socket.on("ride:new", loadJobs);
 socket.on("ride:update", loadJobs);
 
-// ================= CREATE DRIVER =================
+// CREATE DRIVER
 async function ensureDriverExists() {
-  try {
-    if (!driverId) {
-      driverId = "D-" + Math.floor(Math.random() * 99999);
-      localStorage.setItem("driverId", driverId);
-    }
-
-    const res = await fetch(`${API}/api/driver/init`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: driverId,
-        name: "Driver " + driverId,
-        vehicleType: "UBERX"
-      })
-    });
-
-    const data = await res.json();
-
-    driverMongoId = data._id;
-    localStorage.setItem("driverMongoId", driverMongoId);
-
-    console.log("Driver ready:", data);
-
-  } catch (err) {
-    console.log("Driver init error:", err);
+  if (!driverId) {
+    driverId = "D-" + Math.floor(Math.random() * 99999);
+    localStorage.setItem("driverId", driverId);
   }
+
+  const res = await fetch(`${API}/api/driver/init`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      userId: driverId,
+      name: "Driver " + driverId,
+      vehicleType: "UBERX"
+    })
+  });
+
+  const data = await res.json();
+  driverMongoId = data._id;
+  localStorage.setItem("driverMongoId", driverMongoId);
 }
 
-// ================= PROFILE =================
+// PROFILE
 function updateProfile() {
   document.getElementById("profile").innerHTML = `
     <b>Driver ID:</b> ${driverId}<br/>
@@ -61,98 +49,86 @@ function updateProfile() {
   `;
 }
 
-// ================= MAP =================
+// MAP
 function initMap() {
   map = L.map("map").setView([50.06, 19.94], 13);
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "OSM"
-  }).addTo(map);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 }
 
-// ================= LOAD JOBS =================
+// LOAD JOBS
 async function loadJobs() {
-  try {
-    const res = await fetch(`${API}/api/rides`);
-    const rides = await res.json();
+  const res = await fetch(`${API}/api/rides`);
+  const rides = await res.json();
 
-    const jobsDiv = document.getElementById("jobs");
-    jobsDiv.innerHTML = "";
+  const jobsDiv = document.getElementById("jobs");
+  jobsDiv.innerHTML = "";
 
-    rides
-      .filter(r =>
-        r.status === "REQUESTED" ||
-        r.driverId === driverMongoId
-      )
-      .forEach(r => {
-        const div = document.createElement("div");
-        div.className = "card";
+  rides
+    .filter(r =>
+      r.status === "REQUESTED" ||
+      r.driverId === driverMongoId
+    )
+    .forEach(r => {
+      let buttons = "";
 
-        let button = "";
+      if (r.status === "REQUESTED") {
+        buttons = `<button onclick="acceptRide('${r._id}')">ACCEPT</button>`;
+      }
 
-        if (r.status === "REQUESTED") {
-          button = `<button onclick="acceptRide('${r._id}')">ACCEPT</button>`;
-        }
+      if (r.status === "DRIVER_ARRIVING") {
+        buttons = `<button onclick="arrived('${r._id}')">ARRIVED</button>`;
+      }
 
-        div.innerHTML = `
-          <b>${r.type}</b><br/>
-          Status: ${r.status}<br/>
-          Fare: $${r.fare || 0}<br/>
-          ${button}
-        `;
+      if (r.status === "WAITING_START") {
+        buttons = `<button onclick="startTrip('${r._id}')">START TRIP</button>`;
+      }
 
-        jobsDiv.appendChild(div);
-      });
+      if (r.status === "IN_PROGRESS") {
+        buttons = `<button onclick="completeRide('${r._id}')">COMPLETE</button>`;
+      }
 
-  } catch (err) {
-    console.log("Load jobs error:", err);
-  }
-}
+      const div = document.createElement("div");
+      div.className = "card";
 
-// ================= ACCEPT =================
-async function acceptRide(id) {
-  try {
-    if (!driverMongoId) {
-      alert("Driver not ready");
-      return;
-    }
+      div.innerHTML = `
+        <b>${r.type}</b><br/>
+        Status: ${r.status}<br/>
+        ${buttons}
+      `;
 
-    const res = await fetch(`${API}/api/rides/${id}/accept`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        driverId: driverMongoId
-      })
+      jobsDiv.appendChild(div);
     });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      console.log("❌ BACKEND ERROR:", data);
-      alert(data.error || "Accept failed");
-      return;
-    }
-
-    console.log("✅ Accepted:", data);
-    loadJobs();
-
-  } catch (err) {
-    console.log("Accept error:", err);
-  }
 }
 
-// ================= TOGGLE =================
-function toggleOnline() {
-  online = !online;
-
-  updateProfile();
-
-  socket.emit("driver:status", {
-    driverId: driverMongoId, // 🔥 FIX (was wrong before)
-    status: online ? "IDLE" : "OFFLINE"
+// ACTIONS
+async function acceptRide(id) {
+  await fetch(`${API}/api/rides/${id}/accept`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ driverId: driverMongoId })
   });
 }
 
-// 🔥 CRITICAL: expose globally
+async function arrived(id) {
+  await fetch(`${API}/api/rides/${id}/arrived`, { method: "PATCH" });
+}
+
+async function startTrip(id) {
+  await fetch(`${API}/api/rides/${id}/start`, { method: "PATCH" });
+}
+
+async function completeRide(id) {
+  await fetch(`${API}/api/rides/${id}/complete`, { method: "PATCH" });
+}
+
+// TOGGLE
+function toggleOnline() {
+  online = !online;
+  updateProfile();
+}
+
 window.toggleOnline = toggleOnline;
 window.acceptRide = acceptRide;
+window.arrived = arrived;
+window.startTrip = startTrip;
+window.completeRide = completeRide;
