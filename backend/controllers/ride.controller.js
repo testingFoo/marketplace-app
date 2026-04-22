@@ -62,14 +62,25 @@ exports.acceptRide = async (req, res) => {
     const { driverId } = req.body;
     const rideId = req.params.id;
 
-    const ride = await Ride.findById(rideId);
-    const driver = await Driver.findById(driverId);
+    console.log("🚀 ACCEPT START", { driverId, rideId });
 
-    if (!ride || !driver) {
-      return res.status(404).json({ error: "Ride/Driver not found" });
+    if (!driverId) {
+      return res.status(400).json({ error: "driverId required" });
     }
 
-    ride.status = "DRIVER_ASSIGNED";
+    const ride = await Ride.findById(rideId);
+    if (!ride) {
+      console.log("❌ Ride not found");
+      return res.status(404).json({ error: "Ride not found" });
+    }
+
+    const driver = await Driver.findById(driverId);
+    if (!driver) {
+      console.log("❌ Driver not found");
+      return res.status(404).json({ error: "Driver not found" });
+    }
+
+    ride.status = "DRIVER_ARRIVING";
     ride.driverId = driverId;
 
     let coords = await getRoute(
@@ -78,6 +89,7 @@ exports.acceptRide = async (req, res) => {
     );
 
     if (!coords) {
+      console.log("⚠️ Using fallback coords");
       coords = [
         [ride.originCoords.lng, ride.originCoords.lat],
         [ride.destinationCoords.lng, ride.destinationCoords.lat]
@@ -89,16 +101,36 @@ exports.acceptRide = async (req, res) => {
     await ride.save();
 
     const io = req.app.get("io");
-    if (io) io.emit("ride:update", ride);
 
-    res.json(ride);
+    console.log("📡 Starting movement...");
+    console.log("startDriverMovement exists?", typeof startDriverMovement);
+
+    // 🔥 SAFE CALL
+    if (typeof startDriverMovement === "function") {
+      startDriverMovement(io, ride._id, coords);
+    } else {
+      console.log("❌ startDriverMovement is NOT a function");
+    }
+
+    if (io) {
+      io.emit("ride:update", {
+        ...ride.toObject(),
+        routeCoords: coords
+      });
+    }
+
+    console.log("✅ ACCEPT SUCCESS");
+
+    res.json({
+      ...ride.toObject(),
+      routeCoords: coords
+    });
 
   } catch (err) {
-    console.log("ACCEPT ERROR:", err);
+    console.log("🔥 ACCEPT ERROR FULL:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
-
 // ================= GET =================
 exports.getRides = async (req, res) => {
   const rides = await Ride.find().sort({ createdAt: -1 });
