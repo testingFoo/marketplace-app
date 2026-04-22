@@ -1,5 +1,4 @@
-
-  const API = "/api";
+const API = "/api";
 
 const App = {
 
@@ -10,7 +9,9 @@ const App = {
   openDriver() {
     window.location.href = "/driver.html";
   }
+};
 
+// ================= AUTH =================
 
 async function register() {
   const email = document.getElementById("email").value;
@@ -18,7 +19,7 @@ async function register() {
 
   const res = await fetch(`${API}/auth/register`, {
     method: "POST",
-    headers: {"Content-Type":"application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password })
   });
 
@@ -32,8 +33,7 @@ async function login() {
 
   const res = await fetch(`${API}/auth/login`, {
     method: "POST",
-    headers: {"Content-Type":"application/json"},
-    credentials: "include",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password })
   });
 
@@ -42,5 +42,3 @@ async function login() {
   document.getElementById("userBox").innerText =
     data.user ? "Logged in: " + data.user.email : "Login failed";
 }
-
-};
