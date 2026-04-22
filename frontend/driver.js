@@ -4,62 +4,16 @@ const socket = io(API);
 let driverId = localStorage.getItem("driverId");
 let driverMongoId = localStorage.getItem("driverMongoId");
 
-let online = false;
 let map;
 
-// ================= INIT =================
+// INIT
 window.onload = async () => {
   initMap();
   await ensureDriverExists();
-  updateProfile();
   loadJobs();
 };
 
-// ================= SOCKET =================
-socket.on("connect", () => {
-  console.log("Driver connected:", socket.id);
-});
-
-socket.on("ride:new", loadJobs);
-socket.on("ride:update", loadJobs);
-
-// ================= CREATE DRIVER =================
-async function ensureDriverExists() {
-  try {
-    if (!driverId) {
-      driverId = "D-" + Math.floor(Math.random() * 99999);
-      localStorage.setItem("driverId", driverId);
-    }
-
-    const res = await fetch(`${API}/api/driver/init`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: driverId,
-        name: "Driver " + driverId,
-        vehicleType: "UBERX"
-      })
-    });
-
-    const data = await res.json();
-
-    driverMongoId = data._id;
-    localStorage.setItem("driverMongoId", driverMongoId);
-
-  } catch (err) {
-    console.log("Driver init error:", err);
-  }
-}
-
-// ================= PROFILE =================
-function updateProfile() {
-  document.getElementById("profile").innerHTML = `
-    <b>Driver ID:</b> ${driverId}<br/>
-    <b>Status:</b> ${online ? "Online 🟢" : "Offline 🔴"}
-  `;
-}
-
-// ================= MAP =================
+// MAP
 function initMap() {
   map = L.map("map").setView([50.06, 19.94], 13);
 
@@ -68,88 +22,99 @@ function initMap() {
   }).addTo(map);
 }
 
-// ================= LOAD JOBS =================
+// CREATE DRIVER
+async function ensureDriverExists() {
+  if (!driverId) {
+    driverId = "D-" + Math.floor(Math.random() * 99999);
+    localStorage.setItem("driverId", driverId);
+  }
+
+  const res = await fetch(`${API}/api/driver/init`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      userId: driverId,
+      name: "Driver " + driverId
+    })
+  });
+
+  const data = await res.json();
+
+  driverMongoId = data._id;
+  localStorage.setItem("driverMongoId", driverMongoId);
+}
+
+// LOAD JOBS
 async function loadJobs() {
-  try {
-    const res = await fetch(`${API}/api/rides`);
-    const rides = await res.json();
+  const res = await fetch(`${API}/api/rides`);
+  const rides = await res.json();
 
-    const jobsDiv = document.getElementById("jobs");
-    jobsDiv.innerHTML = "";
+  const jobsDiv = document.getElementById("jobs");
+  jobsDiv.innerHTML = "";
 
-    rides
-      .filter(r =>
-        // 🔥 SHOW ONLY REQUESTED OR MY OWN RIDE
-        r.status === "REQUESTED" ||
-        r.driverId === driverMongoId
-      )
-      .forEach(r => {
-        const div = document.createElement("div");
-        div.className = "card";
+  rides.forEach(r => {
+    const div = document.createElement("div");
+    div.className = "card";
 
-        let button = "";
+    let actions = "";
 
-        if (r.status === "REQUESTED") {
-          button = `<button onclick="acceptRide('${r._id}')">ACCEPT</button>`;
-        }
-
-        div.innerHTML = `
-          <b>${r.type}</b><br/>
-          Status: ${r.status}<br/>
-          Fare: $${r.fare || 0}<br/>
-          ${button}
-        `;
-
-        jobsDiv.appendChild(div);
-      });
-
-  } catch (err) {
-    console.log("Load jobs error:", err);
-  }
-}
-
-// ================= ACCEPT =================
-async function acceptRide(id) {
-  try {
-    if (!driverMongoId) {
-      alert("Driver not ready");
-      return;
+    if (r.status === "REQUESTED") {
+      actions = `<button onclick="acceptRide('${r._id}')">ACCEPT</button>`;
     }
 
-    const res = await fetch(`${API}/api/rides/${id}/accept`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        driverId: driverMongoId
-      })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      alert(data.error || "Accept failed");
-      return;
+    if (r.status === "DRIVER_ASSIGNED") {
+      actions = `<button onclick="startToPickup('${r._id}')">GO TO PICKUP</button>`;
     }
 
-    console.log("Accepted:", data);
-    loadJobs();
+    if (r.status === "EN_ROUTE_TO_PICKUP") {
+      actions = `<button onclick="arrived('${r._id}')">ARRIVED</button>`;
+    }
 
-  } catch (err) {
-    console.log("Accept error:", err);
-  }
-}
+    if (r.status === "AT_PICKUP") {
+      actions = `<button onclick="startTrip('${r._id}')">START TRIP</button>`;
+    }
 
-// ================= TOGGLE =================
-function toggleOnline() {
-  online = !online;
+    div.innerHTML = `
+      <b>${r.type}</b><br/>
+      Status: ${r.status}<br/>
+      ${actions}
+    `;
 
-  updateProfile();
-
-  socket.emit("driver:status", {
-    driverId,
-    status: online ? "IDLE" : "OFFLINE"
+    jobsDiv.appendChild(div);
   });
 }
 
-window.toggleOnline = toggleOnline;
-window.acceptRide = acceptRide;
+// ACTIONS
+async function acceptRide(id) {
+  await fetch(`${API}/api/rides/${id}/accept`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ driverId: driverMongoId })
+  });
+
+  loadJobs();
+}
+
+async function startToPickup(id) {
+  await fetch(`${API}/api/rides/${id}/start-to-pickup`, {
+    method: "PATCH"
+  });
+
+  loadJobs();
+}
+
+async function arrived(id) {
+  await fetch(`${API}/api/rides/${id}/arrived`, {
+    method: "PATCH"
+  });
+
+  loadJobs();
+}
+
+async function startTrip(id) {
+  await fetch(`${API}/api/rides/${id}/start-trip`, {
+    method: "PATCH"
+  });
+
+  loadJobs();
+}
