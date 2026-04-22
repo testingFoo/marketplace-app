@@ -22,7 +22,7 @@ const DriverSchema = new mongoose.Schema({
 
   status: {
     type: String,
-    enum: ["OFFLINE", "ONLINE", "IDLE", "EN_ROUTE", "ON_TRIP"],
+    enum: ["REQUESTED","DRIVER_ARRIVING","WAITING_START","IN_PROGRESS","COMPLETED","CANCELLED"]
     default: "IDLE"
   },
 
