@@ -14,8 +14,8 @@ router.post("/", ctrl.createRide);
 router.patch("/:id/accept", ctrl.acceptRide);
 
 // 🔥 NEW DRIVER FLOW ONLY
-router.patch("/:id/start-to-pickup", driverCtrl.startToPickup);
-router.patch("/:id/arrived", driverCtrl.arrived);
-router.patch("/:id/start-trip", driverCtrl.startTrip);
+// router.patch("/:id/start-to-pickup", driverCtrl.startToPickup);
+// router.patch("/:id/arrived", driverCtrl.arrived);
+// router.patch("/:id/start-trip", driverCtrl.startTrip);
 
 module.exports = router;
