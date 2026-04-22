@@ -9,6 +9,7 @@ const authRoutes = require("./routes/auth.routes");
 const driverRoutes = require("./routes/driver.routes");
 
 const app = express();
+app.use(express.static("public"));
 
 // ================= MIDDLEWARE =================
 app.use(cors());
