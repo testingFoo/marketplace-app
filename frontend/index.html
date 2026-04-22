@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Super App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial;
+      background: #0b0b0b;
+      color: white;
+    }
+
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+
+    .sidebar {
+      width: 260px;
+      background: #111;
+      padding: 15px;
+    }
+
+    .nav-btn {
+      width: 100%;
+      padding: 12px;
+      margin: 5px 0;
+      background: #1c1c1c;
+      border: none;
+      color: white;
+      cursor: pointer;
+      border-radius: 6px;
+      text-align: left;
+    }
+
+    .nav-btn:hover {
+      background: #2a2a2a;
+    }
+
+    .main {
+      flex: 1;
+      padding: 40px;
+    }
+
+    .card {
+      background: #1c1c1c;
+      padding: 20px;
+      margin: 10px 0;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="sidebar">
+    <h2>Super App</h2>
+
+    <button class="nav-btn" onclick="App.openRide()">🚗 Ride</button>
+    <button class="nav-btn" onclick="App.openDriver()">🚕 Driver</button>
+
+    <button class="nav-btn">💳 Finance (soon)</button>
+    <button class="nav-btn">🏢 Business (soon)</button>
+  </div>
+
+  <div class="main">
+    <h1>Dashboard</h1>
+
+    <div class="card">
+      ✔ Uber system isolated<br/>
+      ✔ Ready for multi-modules
+    </div>
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>
