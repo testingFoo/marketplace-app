@@ -1,6 +1,9 @@
 const Ride = require("../models/Ride");
 const Driver = require("../models/Driver");
 
+// 🔥 IMPORTANT (MAKE SURE PATH IS CORRECT)
+const { startDriverMovement } = require("../services/driverMovement");
+
 // ================= GET ROUTE =================
 async function getRoute(origin, destination) {
   try {
@@ -9,7 +12,7 @@ async function getRoute(origin, destination) {
     const res = await fetch(url);
     const data = await res.json();
 
-    // ✅ SUCCESS CASE
+    // ✅ SUCCESS
     if (data.routes && data.routes.length > 0) {
       return data.routes[0].geometry.coordinates;
     }
@@ -20,7 +23,7 @@ async function getRoute(origin, destination) {
     console.log("❌ Mapbox failed:", err.message);
   }
 
-  // 🔥 FALLBACK (ALWAYS WORKS)
+  // 🔥 FALLBACK (NEVER BREAK ACCEPT)
   return [
     [origin.lng, origin.lat],
     [destination.lng, destination.lat]
@@ -105,7 +108,7 @@ exports.acceptRide = async (req, res) => {
     console.log("📡 Starting movement...");
     console.log("startDriverMovement exists?", typeof startDriverMovement);
 
-    // 🔥 SAFE CALL
+    // ✅ SAFE CALL (NO CRASH)
     if (typeof startDriverMovement === "function") {
       startDriverMovement(io, ride._id, coords);
     } else {
@@ -131,8 +134,74 @@ exports.acceptRide = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
+
+// ================= DRIVER ARRIVED =================
+exports.arrived = async (req, res) => {
+  try {
+    const ride = await Ride.findById(req.params.id);
+    if (!ride) return res.status(404).json({ error: "Ride not found" });
+
+    ride.status = "WAITING_START";
+    await ride.save();
+
+    const io = req.app.get("io");
+    if (io) io.emit("ride:update", ride);
+
+    res.json(ride);
+
+  } catch (err) {
+    console.log("ARRIVED ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ================= START TRIP =================
+exports.startTrip = async (req, res) => {
+  try {
+    const ride = await Ride.findById(req.params.id);
+    if (!ride) return res.status(404).json({ error: "Ride not found" });
+
+    ride.status = "IN_PROGRESS";
+    await ride.save();
+
+    const io = req.app.get("io");
+    if (io) io.emit("ride:update", ride);
+
+    res.json(ride);
+
+  } catch (err) {
+    console.log("START ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ================= COMPLETE =================
+exports.completeRide = async (req, res) => {
+  try {
+    const ride = await Ride.findById(req.params.id);
+    if (!ride) return res.status(404).json({ error: "Ride not found" });
+
+    ride.status = "COMPLETED";
+    await ride.save();
+
+    const io = req.app.get("io");
+    if (io) io.emit("ride-completed", { rideId: ride._id });
+
+    res.json(ride);
+
+  } catch (err) {
+    console.log("COMPLETE ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 // ================= GET =================
 exports.getRides = async (req, res) => {
-  const rides = await Ride.find().sort({ createdAt: -1 });
-  res.json(rides);
+  try {
+    const rides = await Ride.find().sort({ createdAt: -1 });
+    res.json(rides);
+  } catch (err) {
+    console.log("GET ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 };
