@@ -16,6 +16,6 @@
     "passport-jwt": "^4.0.1",
     "socket.io": "^4.7.5",
     "axios": "^1.0.0",
-    "express-session":  "^1.0.0"
+   "express-session": "^1.17.3"
   }
 }
