@@ -2,31 +2,68 @@ const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
+// ================= REGISTER =================
 exports.register = async (req, res) => {
-  const hashed = await bcrypt.hash(req.body.password, 10);
+  try {
+    const { email, password, name } = req.body;
 
-  const user = await User.create({
-    ...req.body,
-    password: hashed
-  });
+    const existing = await User.findOne({ email });
+    if (existing) return res.status(400).json({ error: "User exists" });
 
-  res.json(user);
+    const hashed = await bcrypt.hash(password, 10);
+
+    const user = await User.create({
+      email,
+      password: hashed,
+      name
+    });
+
+    res.json({
+      id: user._id,
+      email: user.email,
+      name: user.name
+    });
+
+  } catch (err) {
+    console.log("REGISTER ERROR:", err);
+    res.status(500).json({ error: "Register failed" });
+  }
 };
 
+// ================= LOGIN =================
 exports.login = async (req, res) => {
-  const user = await User.findOne({ email: req.body.email });
+  try {
+    const { email, password } = req.body;
 
-  if (!user) return res.status(404).json("no user");
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ error: "no user" });
 
-  const ok = await bcrypt.compare(req.body.password, user.password);
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) return res.status(401).json({ error: "wrong password" });
 
-  if (!ok) return res.status(401).json("wrong password");
+    const token = jwt.sign(
+      { id: user._id, roles: user.roles },
+      "SECRET",
+      { expiresIn: "7d" }
+    );
 
-  const token = jwt.sign(
-    { id: user._id, role: user.role },
-    "SECRET",
-    { expiresIn: "7d" }
-  );
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        roles: user.roles
+      }
+    });
 
-  res.json({ token, user });
+  } catch (err) {
+    console.log("LOGIN ERROR:", err);
+    res.status(500).json({ error: "Login failed" });
+  }
+};
+
+// ================= ME =================
+exports.me = async (req, res) => {
+  res.json({ user: req.user });
 };
