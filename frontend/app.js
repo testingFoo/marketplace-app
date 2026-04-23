@@ -2,17 +2,13 @@ const API = "https://marketplace-app-m8ac.onrender.com";
 
 // ================= REGISTER =================
 async function register() {
-  const payload = {
-    firstName: document.getElementById("firstName")?.value?.trim(),
-    surname: document.getElementById("surname")?.value?.trim(),
-    email: document.getElementById("email")?.value?.trim(),
-    password: document.getElementById("password")?.value
-  };
 
-  // remove empty fields safely
-  Object.keys(payload).forEach((key) => {
-    if (!payload[key]) delete payload[key];
-  });
+    const firstName = document.getElementById("firstName")?.value?.trim(),
+    const surName = document.getElementById("surname")?.value?.trim(),
+    const email = document.getElementById("email")?.value?.trim(),
+    const password = document.getElementById("password")?.value
+  
+    const payload = { firsName, surName, email, password};
 
   try {
     const res = await fetch(`${API}/api/auth/register`, {
