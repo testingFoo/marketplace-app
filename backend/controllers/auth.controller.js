@@ -6,8 +6,6 @@ const jwt = require("jsonwebtoken");
 exports.register = async (req, res) => {
   try {
     const {
-      firstName,
-      lastName,
       email,
       password
     } = req.body;
@@ -24,8 +22,6 @@ exports.register = async (req, res) => {
     const hashed = await bcrypt.hash(password, 10);
 
     const user = await User.create({
-      firstName: firstName || "",
-      lastName: lastName || "",
       email,
       password: hashed
     });
@@ -41,8 +37,6 @@ exports.register = async (req, res) => {
       user: {
         id: user._id,
         email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName
       }
     });
 
@@ -77,8 +71,6 @@ exports.login = async (req, res) => {
       user: {
         id: user._id,
         email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName
       }
     });
 
