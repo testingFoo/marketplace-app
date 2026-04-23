@@ -7,8 +7,14 @@ async function register() {
     const surName = document.getElementById("surname")?.value?.trim()
     const email = document.getElementById("email")?.value?.trim()
     const password = document.getElementById("password")?.value
-  
-    const payload = { firsName, surName, email, password};
+
+    
+  console.log("EMAIL:", email);
+  console.log("PASSWORD:", password);
+    console.log("FIrst Name", firstName);
+    console.log("Surname", surName);
+    
+    const payload = { firstName, surName, email, password};
 
   try {
     const res = await fetch(`${API}/api/auth/register`, {
