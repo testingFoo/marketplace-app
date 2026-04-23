@@ -1,31 +1,36 @@
 const mongoose = require("mongoose");
 
 const UserSchema = new mongoose.Schema({
-  
+
+  // ================= AUTH =================
   email: { type: String, unique: true },
   password: String,
-  
+
   // ================= BASIC PROFILE =================
   firstName: String,
   lastName: String,
   sex: { type: String, enum: ["male", "female", "other"] },
   dob: Date,
+
   phone: {
     countryCode: String,
     number: String
   },
-  education: {
-    type: String},
-  currentCity: String,
-  bornCity: String,
+
+  education: String,
+
   profilePic: String,
-  
+
   // ================= LOCATION =================
   city: String,
   country: String,
+  currentCity: String,
+  bornCity: String,
 
-   // ================= PROFESSIONAL =================
+  // ================= PROFESSIONAL =================
   profession: String,
+
+  // 🔥 SAFE ENUM (won’t crash if invalid)
   industry: {
     type: String,
     enum: [
@@ -41,11 +46,11 @@ const UserSchema = new mongoose.Schema({
       "Media",
       "Legal",
       "Other"
-    ]
+    ],
+    default: "Other"
   },
-  
+
   // ================= BUSINESS =================
-  
   business: {
     isOwner: { type: Boolean, default: false },
     name: String,
@@ -58,31 +63,33 @@ const UserSchema = new mongoose.Schema({
     }
   },
 
-  // ================= ASSETS / COMMODITIES =================
+  // ================= ASSETS =================
   commodities: [
     {
       type: {
         type: String,
-        enum: ["grain", "metal", "other"]
+        enum: ["grain", "metal", "other"],
+        default: "other"
       },
-      name: String,   // e.g. Wheat, Gold
+      name: String,
       quantity: Number
     }
   ],
 
-// ================= WALLET =================
+  // ================= WALLET =================
   walletBalance: { type: Number, default: 10 },
   currency: { type: String, default: "USD" },
 
-   roles: {
-    driver: { type: Boolean, default: false },
-   },
+  // ================= ROLES =================
+  roles: {
+    driver: { type: Boolean, default: false }
+  },
 
-  
   createdAt: {
     type: Date,
     default: Date.now
   }
+
 });
 
 module.exports = mongoose.model("User", UserSchema);
