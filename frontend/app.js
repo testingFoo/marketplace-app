@@ -4,7 +4,7 @@ const API = "https://marketplace-app-m8ac.onrender.com";
 async function register() {
 
     const firstName = document.getElementById("firstName")?.value?.trim()
-    const lastName  = document.getElementById("lastName ")?.value?.trim()
+    const lastName  = document.getElementById("lastName")?.value?.trim()
     const email = document.getElementById("email")?.value?.trim()
     const password = document.getElementById("password")?.value
 
@@ -12,7 +12,7 @@ async function register() {
   console.log("EMAIL:", email);
   console.log("PASSWORD:", password);
     console.log("FIrst Name", firstName);
-    console.log("Surname", lastName );
+    console.log("last Name", lastName );
     
     const payload = { firstName, lastName, email, password};
 
