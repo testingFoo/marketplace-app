@@ -5,36 +5,26 @@ const jwt = require("jsonwebtoken");
 // ================= REGISTER =================
 exports.register = async (req, res) => {
   try {
-    const { email, password, name } = req.body;
+    const existing = await User.findOne({ email: req.body.email });
 
-    const existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ error: "User exists" });
+    if (existing) {
+      return res.status(400).json({ error: "Email already exists" });
+    }
 
-  const hashed = await bcrypt.hash(req.body.password, 10);
+    const hashed = await bcrypt.hash(req.body.password, 10);
 
     const user = await User.create({
-      email: req.body.email,
-      password: hashed,
-
-      // NEW FIELDS (optional safe)
-      dob: req.body.dob || null,
-      sex: req.body.sex || null,
-      education: req.body.education || null,
-      currentCity: req.body.currentCity || null,
-      bornCity: req.body.bornCity || null,
-
-      social: req.body.social || {},
-      business: req.body.business || {}
+      ...req.body,
+      password: hashed
     });
 
     res.json(user);
 
   } catch (err) {
     console.log("REGISTER ERROR:", err);
-    res.status(500).json({ error: "Register failed" });
+    res.status(500).json({ error: "Server error" });
   }
 };
-
 // ================= LOGIN =================
 exports.login = async (req, res) => {
   try {
