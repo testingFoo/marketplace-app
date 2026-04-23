@@ -4,14 +4,16 @@ const API = "https://marketplace-app-m8ac.onrender.com";
 async function register() {
 
     const firstName = document.getElementById("firstName")?.value?.trim()
+    const lastName = document.getElementById("lastName")?.value?.trim()
     const email = document.getElementById("email")?.value?.trim()
     const password = document.getElementById("password")?.value
     
     console.log("EMAIL:", email);
     console.log("PASSWORD:", password);
+    console.log("Last Name", lastName);
     console.log("FIrst Name", firstName);
     
-    const payload = { firstName, email, password};
+    const payload = { firstName, lastName, email, password};
 
   try {
     const res = await fetch(`${API}/api/auth/register`, {
