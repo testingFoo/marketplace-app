@@ -6,32 +6,13 @@ const jwt = require("jsonwebtoken");
 exports.register = async (req, res) => {
   try {
     const {
-      email,
-      password,
-
       firstName,
       surname,
-      sex,
-      dob,
-
-      city,
-      country,
-
-      phone,
-
-      profession,
-      industry,
-
-      isBusinessOwner,
-      businessName,
-      website,
-      businessEmail,
-
-      currency,
-      commodities
+      email,
+      password,
     } = req.body;
 
-    // 🔒 EMAIL CHECK (KEEP)
+    //  EMAIL CHECK (KEEP)
     const existing = await User.findOne({ email });
     if (existing) {
       return res.status(400).json({ error: "Email already exists" });
@@ -41,45 +22,13 @@ exports.register = async (req, res) => {
     const hashed = await bcrypt.hash(password, 10);
 
     // ✅ CREATE USER MATCHING YOUR SCHEMA
+    
     const user = await User.create({
-      email,
-      password: hashed,
-
-      // BASIC
       firstName: firstName || "",
       lastName: surname || "",
-      sex: sex || null,
-      dob: dob || null,
-
-      // LOCATION
-      city: city || "",
-      country: country || "",
-
-      // CONTACT
-      phone: {
-        countryCode: "",
-        number: phone || ""
-      },
-
-      // PROFESSIONAL
-      profession: profession || "",
-      industry: industry || "Other",
-
-      // ✅ FIXED BUSINESS (correct schema)
-      business: {
-        isOwner: isBusinessOwner || false,
-        name: businessName || "",
-        website: website || "",
-        email: businessEmail || ""
-      },
-
-      // WALLET
-      walletBalance: 10,
-      currency: currency || "USD",
-
-      // COMMODITIES
-      commodities: Array.isArray(commodities) ? commodities : []
-    });
+      email,
+      password: hashed}
+                                   });
 
     // 🔐 TOKEN
     const token = jwt.sign(
