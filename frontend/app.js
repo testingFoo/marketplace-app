@@ -1,26 +1,17 @@
-
 const API = "https://marketplace-app-m8ac.onrender.com";
 
-
-// ================= AUTH =================
 // ================= REGISTER =================
 async function register() {
   const payload = {
-    firstName: document.getElementById("firstName")?.value,
-    surname: document.getElementById("surname")?.value,
-    email: document.getElementById("email")?.value,
-    password: document.getElementById("password")?.value,
-   };
+    firstName: document.getElementById("firstName")?.value?.trim(),
+    surname: document.getElementById("surname")?.value?.trim(),
+    email: document.getElementById("email")?.value?.trim(),
+    password: document.getElementById("password")?.value
+  };
 
-  // 🧹 REMOVE EMPTY FIELDS (VERY IMPORTANT)
-  Object.keys(payload).forEach(key => {
-    if (
-      payload[key] === undefined ||
-      payload[key] === null ||
-      payload[key] === ""
-    ) {
-      delete payload[key];
-    }
+  // remove empty fields safely
+  Object.keys(payload).forEach((key) => {
+    if (!payload[key]) delete payload[key];
   });
 
   try {
@@ -31,42 +22,76 @@ async function register() {
     });
 
     const data = await res.json();
-    console.log(data);
 
-    if (res.ok) {
-      alert("Registered! Now login.");
-    } else {
+    if (!res.ok) {
+      console.log("REGISTER ERROR:", data);
       alert(data.error || "Register failed");
+      return;
     }
 
+    alert("Registered successfully! Now login.");
+    console.log("REGISTER SUCCESS:", data);
+
   } catch (err) {
-    console.log("REGISTER ERROR:", err);
+    console.log("REGISTER NETWORK ERROR:", err);
     alert("Network error");
   }
 }
 
 // ================= LOGIN =================
 async function login() {
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
+  const email = document.getElementById("email")?.value?.trim();
+  const password = document.getElementById("password")?.value;
 
-  const res = await fetch(`${API}/api/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    alert(data.error || "Login failed");
+  if (!email || !password) {
+    alert("Email and password required");
     return;
   }
 
-  // 🔥 SAVE TOKEN + USER
-  localStorage.setItem("token", data.token);
-  localStorage.setItem("user", JSON.stringify(data.user));
+  try {
+    const res = await fetch(`${API}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
 
-  // 🔥 REDIRECT TO PROFILE
-  window.location.href = "/profile.html";
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.log("LOGIN ERROR:", data);
+      alert(data.error || "Login failed");
+      return;
+    }
+
+    // save auth
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("user", JSON.stringify(data.user));
+
+    console.log("LOGIN SUCCESS:", data);
+
+    // redirect to profile
+    window.location.href = "/profile.html";
+
+  } catch (err) {
+    console.log("LOGIN NETWORK ERROR:", err);
+    alert("Network error");
+  }
+}
+
+// ================= OPTIONAL HELPERS =================
+
+// get logged user safely
+function getCurrentUser() {
+  try {
+    return JSON.parse(localStorage.getItem("user"));
+  } catch {
+    return null;
+  }
+}
+
+// logout helper
+function logout() {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  window.location.href = "/";
 }
