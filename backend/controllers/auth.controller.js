@@ -9,28 +9,27 @@ exports.register = async (req, res) => {
       firstName,
       surname,
       email,
-      password,
+      password
     } = req.body;
 
-    //  EMAIL CHECK (KEEP)
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password required" });
+    }
+
     const existing = await User.findOne({ email });
     if (existing) {
       return res.status(400).json({ error: "Email already exists" });
     }
 
-    // 🔒 HASH
     const hashed = await bcrypt.hash(password, 10);
 
-    // ✅ CREATE USER MATCHING YOUR SCHEMA
-    
     const user = await User.create({
       firstName: firstName || "",
       lastName: surname || "",
       email,
-      password: hashed}
-                                   });
+      password: hashed
+    });
 
-    // 🔐 TOKEN
     const token = jwt.sign(
       { id: user._id },
       "SECRET",
@@ -51,7 +50,7 @@ exports.register = async (req, res) => {
     console.log("REGISTER ERROR FULL:", err);
     res.status(500).json({
       error: "Server error",
-      message: err.message   // 🔥 IMPORTANT FOR DEBUG
+      message: err.message
     });
   }
 };
@@ -68,7 +67,7 @@ exports.login = async (req, res) => {
     if (!ok) return res.status(401).json({ error: "wrong password" });
 
     const token = jwt.sign(
-      { id: user._id, roles: user.roles },
+      { id: user._id },
       "SECRET",
       { expiresIn: "7d" }
     );
@@ -78,8 +77,8 @@ exports.login = async (req, res) => {
       user: {
         id: user._id,
         email: user.email,
-        name: user.name,
-        roles: user.roles
+        firstName: user.firstName,
+        lastName: user.lastName
       }
     });
 
@@ -88,7 +87,6 @@ exports.login = async (req, res) => {
     res.status(500).json({ error: "Login failed" });
   }
 };
-
 
 // ================= ME =================
 exports.me = async (req, res) => {
