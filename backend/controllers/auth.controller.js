@@ -25,7 +25,7 @@ exports.register = async (req, res) => {
 
     const user = await User.create({
       firstName: firstName || "",
-      lastName: surname || "",
+      lastName: lastName || "",
       email,
       password: hashed
     });
