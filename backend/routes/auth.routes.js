@@ -1,30 +1,27 @@
 const router = require("express").Router();
 const ctrl = require("../controllers/auth.controller");
-const auth = require("../middleware/auth.middleware");
+const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 
-// REGISTER
+// ================= REGISTER =================
 router.post("/register", ctrl.register);
 
-// LOGIN
+// ================= LOGIN =================
 router.post("/login", ctrl.login);
 
-// CURRENT USER
-router.get("/me", (req, res) => {
+// ================= ME =================
+router.get("/me", async (req, res) => {
   const auth = req.headers.authorization;
 
   if (!auth) return res.json({ user: null });
 
   try {
-    const jwt = require("jsonwebtoken");
     const token = auth.split(" ")[1];
-
     const decoded = jwt.verify(token, "SECRET");
 
-    const User = require("../models/User");
+    const user = await User.findById(decoded.id);
 
-    User.findById(decoded.id).then(user => {
-      res.json({ user });
-    });
+    res.json({ user });
 
   } catch (e) {
     res.json({ user: null });
