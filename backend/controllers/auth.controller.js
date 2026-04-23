@@ -7,7 +7,7 @@ exports.register = async (req, res) => {
   try {
     const {
       firstName,
-      surname,
+      lastName,
       email,
       password
     } = req.body;
