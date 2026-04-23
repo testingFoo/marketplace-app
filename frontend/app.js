@@ -1,44 +1,50 @@
 const API = "https://marketplace-app-m8ac.onrender.com";
 
+const API = "https://marketplace-app-m8ac.onrender.com";
+
 // ================= REGISTER =================
 async function register() {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
 
-    const email = document.getElementById("email")?.value?.trim()
-    const password = document.getElementById("password")?.value
-    
-    console.log("EMAIL:", email);
-    console.log("PASSWORD:", password);
-    
-    const payload = { email, password};
+  console.log("REGISTER INPUT:", { email, password });
+
+  if (!email || !password) {
+    alert("Email and password required");
+    return;
+  }
 
   try {
     const res = await fetch(`${API}/api/auth/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email, password })
     });
 
     const data = await res.json();
+    console.log("REGISTER RESPONSE:", data);
 
     if (!res.ok) {
-      console.log("REGISTER ERROR:", data);
       alert(data.error || "Register failed");
       return;
     }
 
-    alert("Registered successfully! Now login.");
-    console.log("REGISTER SUCCESS:", data);
+    alert("Registered successfully!");
 
   } catch (err) {
-    console.log("REGISTER NETWORK ERROR:", err);
+    console.error("REGISTER ERROR:", err);
     alert("Network error");
   }
 }
 
 // ================= LOGIN =================
 async function login() {
-  const email = document.getElementById("email")?.value?.trim();
-  const password = document.getElementById("password")?.value;
+  const email = document.getElementById("loginEmail").value;
+  const password = document.getElementById("loginPassword").value;
+
+  console.log("LOGIN INPUT:", { email, password });
 
   if (!email || !password) {
     alert("Email and password required");
@@ -48,33 +54,28 @@ async function login() {
   try {
     const res = await fetch(`${API}/api/auth/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({ email, password })
     });
 
     const data = await res.json();
+    console.log("LOGIN RESPONSE:", data);
 
     if (!res.ok) {
-      console.log("LOGIN ERROR:", data);
       alert(data.error || "Login failed");
       return;
     }
 
-    // save auth
     localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-
-    console.log("LOGIN SUCCESS:", data);
-
-    // redirect to profile
-    window.location.href = "/profile.html";
+    alert("Logged in!");
 
   } catch (err) {
-    console.log("LOGIN NETWORK ERROR:", err);
+    console.error("LOGIN ERROR:", err);
     alert("Network error");
   }
 }
-
 // ================= OPTIONAL HELPERS =================
 
 // get logged user safely
