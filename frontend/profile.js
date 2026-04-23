@@ -9,45 +9,91 @@ window.onload = async () => {
     return;
   }
 
-  const res = await fetch(`${API}/api/auth/me`, {
-    headers: {
-      Authorization: `Bearer ${token}`
+  try {
+    // ✅ FIXED (removed double /api)
+    const res = await fetch(`${API}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const data = await res.json();
+
+    if (!data.user) {
+      localStorage.clear();
+      window.location.href = "/";
+      return;
     }
-  });
 
-  const data = await res.json();
+    renderProfile(data.user);
 
-  if (!data.user) {
-    localStorage.clear();
+  } catch (err) {
+    console.log("PROFILE LOAD ERROR:", err);
     window.location.href = "/";
-    return;
   }
-
-  renderProfile(data.user);
 };
 
 // ================= RENDER =================
 function renderProfile(user) {
   document.getElementById("profile").innerHTML = `
     <div class="card">
+
       <h2>${user.name || "No name"}</h2>
       <p><b>Email:</b> ${user.email}</p>
+      <p><b>Phone:</b> ${user.phone || "-"}</p>
 
-      <p><b>DOB:</b> ${user.dob || "-"}</p>
+      <hr/>
+
+      <p><b>DOB:</b> ${user.dob ? new Date(user.dob).toLocaleDateString() : "-"}</p>
       <p><b>Sex:</b> ${user.sex || "-"}</p>
-      <p><b>Education:</b> ${user.education || "-"}</p>
-
-      <p><b>Current City:</b> ${user.currentCity || "-"}</p>
-      <p><b>Born City:</b> ${user.bornCity || "-"}</p>
 
       <hr/>
 
-      <p><b>Wallet:</b> $${user.walletBalance}</p>
-      <p><b>Currency:</b> ${user.currency}</p>
+      <p><b>Profession:</b> ${user.profession || "-"}</p>
+      <p><b>Industry:</b> ${user.industry || "-"}</p>
 
       <hr/>
 
-      <p><b>Business:</b> ${user.business?.name || "No business"}</p>
+      <p><b>City:</b> ${user.currentCity || "-"}</p>
+      <p><b>Country:</b> ${user.country || "-"}</p>
+
+      <hr/>
+
+      <p><b>Wallet:</b> ${user.walletBalance} ${user.currency}</p>
+
+      <hr/>
+
+      <p><b>Business:</b> ${
+        user.roles?.business?.isBusinessOwner
+          ? user.roles.business.name || "Unnamed business"
+          : "No business"
+      }</p>
+
+      ${
+        user.roles?.business?.isBusinessOwner
+          ? `
+          <p><b>Website:</b> ${user.roles.business.website || "-"}</p>
+          <p><b>Business Email:</b> ${user.roles.business.email || "-"}</p>
+        `
+          : ""
+      }
+
+      <hr/>
+
+      <p><b>Commodities:</b></p>
+      <ul>
+        ${
+          user.commodities && user.commodities.length > 0
+            ? user.commodities.map(c => `
+                <li>${c.type || "-"}: ${c.name || "-"} (${c.amount || 0})</li>
+              `).join("")
+            : "<li>None</li>"
+        }
+      </ul>
+
+      <hr/>
+
+      <button onclick="logout()">Logout</button>
     </div>
   `;
 }
