@@ -1,15 +1,5 @@
 
-const API = "https://marketplace-app-m8ac.onrender.com/";
-
-const App = {
-  openRide() {
-    window.location.href = "/rider.html";
-  },
-
-  openDriver() {
-    window.location.href = "/driver.html";
-  }
-};
+const API = "https://marketplace-app-m8ac.onrender.com/api";
 
 
 // ================= AUTH =================
