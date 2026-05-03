@@ -15,6 +15,8 @@ const driverRoutes = require("./routes/driver.routes");
 const profileRoutes = require("./routes/profile.routes");
 const eventRoutes = require("./routes/event.routes");
 
+//TEST
+const Event = require("./models/Event");
 
 
 
@@ -98,6 +100,24 @@ app.use((err, req, res, next) => {
     stack: process.env.NODE_ENV === "production" ? null : err.stack
   });
 });
+
+
+// ================= TEST DEBUG =================
+
+app.get("/api/debug/create-event", async (req, res) => {
+  const event = await Event.create({
+    type: "weather",
+    severity: 2,
+    location: { lat: 52.2297, lng: 21.0122 },
+    data: {
+      temperature: 18,
+      condition: "cloudy"
+    }
+  });
+
+  res.json(event);
+});
+
 
 // ================= START SERVER =================
 const PORT = process.env.PORT || 5000;
