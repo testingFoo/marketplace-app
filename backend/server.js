@@ -13,6 +13,7 @@ const rideRoutes = require("./routes/ride.routes");
 const authRoutes = require("./routes/auth.routes");
 const driverRoutes = require("./routes/driver.routes");
 const profileRoutes = require("./routes/profile.routes");
+const eventRoutes = require("./routes/event.routes");
 
 
 
@@ -37,6 +38,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/driver", driverRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/activity", activityRoutes);
+app.use("/api/events", eventRoutes);
 
 // ================= HTTP SERVER =================
 const server = http.createServer(app);
