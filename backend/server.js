@@ -8,10 +8,12 @@ const { Server } = require("socket.io");
 
 const passport = require("passport");
 
+const activityRoutes = require("./routes/activity.routes");
 const rideRoutes = require("./routes/ride.routes");
 const authRoutes = require("./routes/auth.routes");
 const driverRoutes = require("./routes/driver.routes");
 const profileRoutes = require("./routes/profile.routes");
+
 
 
 
@@ -34,6 +36,7 @@ app.use("/api/rides", rideRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/driver", driverRoutes);
 app.use("/api/profile", profileRoutes);
+app.use("/api/activity", activityRoutes);
 
 // ================= HTTP SERVER =================
 const server = http.createServer(app);
