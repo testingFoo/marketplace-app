@@ -1,154 +1,112 @@
 const express = require("express");
 const http = require("http");
 
-
 const cors = require("cors");
 const mongoose = require("mongoose");
 const { Server } = require("socket.io");
-
 const passport = require("passport");
 
+// ================= ROUTES (KEEP CORE ONLY) =================
 const activityRoutes = require("./routes/activity.routes");
-const rideRoutes = require("./routes/ride.routes");
 const authRoutes = require("./routes/auth.routes");
-const driverRoutes = require("./routes/driver.routes");
 const profileRoutes = require("./routes/profile.routes");
 const eventRoutes = require("./routes/event.routes");
 
-
-//TEST
 const Event = require("./models/Event");
-const { fetchWeatherAndCreateEvents } = require("./services/weather.service");
-
 
 const app = express();
 app.use(express.static("public"));
 app.use(passport.initialize());
+
 // ================= MIDDLEWARE =================
 app.use(cors());
 app.use(express.json());
 
-
-
-// 🔥 REQUEST LOGGER
+// logger
 app.use((req, res, next) => {
   console.log(`➡️ ${req.method} ${req.url}`);
   next();
 });
 
-// ================= ROUTES =================
-app.use("/api/rides", rideRoutes);
+// ================= CORE ROUTES =================
 app.use("/api/auth", authRoutes);
-app.use("/api/driver", driverRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/activity", activityRoutes);
 app.use("/api/events", eventRoutes);
 
-// ================= HTTP SERVER =================
+// ================= SERVER =================
 const server = http.createServer(app);
 
-// ================= SOCKET.IO =================
+// ================= SOCKET =================
 const io = new Server(server, {
   cors: { origin: "*" }
 });
 
-// 🔥 attach io to express (CRITICAL)
 app.set("io", io);
 
-// ================= SOCKET EVENTS =================
 require("./sockets")(io);
 
-// (optional direct connection log - keep both is fine)
 io.on("connection", (socket) => {
-  console.log("🟢 Client connected:", socket.id);
-
-  socket.on("disconnect", () => {
-    console.log("🔴 Client disconnected:", socket.id);
-  });
+  console.log("🟢 connected:", socket.id);
 });
 
 // ================= DB =================
 mongoose.set("debug", true);
 
 mongoose.connect(process.env.MONGO_URL)
-  .then(() => {
-    console.log("🟢 Mongo connected");
+  .then(() => console.log("🟢 Mongo connected"))
+  .catch(err => console.log("🔴 Mongo error:", err));
 
-    app.get("/api/debug/db", (req, res) => {
-      res.json({
-        status: "connected",
-        name: mongoose.connection.name,
-        readyState: mongoose.connection.readyState
-      });
-    });
-  })
-  .catch(err => {
-    console.log("🔴 Mongo error:", err);
-
-    app.get("/api/debug/db", (req, res) => {
-      res.status(500).json({
-        status: "disconnected",
-        error: err.message
-      });
-    });
-  });
-
-// ================= GLOBAL ERROR HANDLER =================
+// ================= CLEAN ERROR HANDLER =================
 app.use((err, req, res, next) => {
-  console.log("🔥 GLOBAL ERROR:", err);
-
-  res.status(500).json({
-    error: err.message,
-    stack: process.env.NODE_ENV === "production" ? null : err.stack
-  });
+  console.log("🔥 ERROR:", err);
+  res.status(500).json({ error: err.message });
 });
 
+// ================= ONLY ONE CORE INTELLIGENCE API =================
+// (THIS replaces all debug weather endpoints)
 
-// ================= TEST DEBUG =================
-
-app.get("/api/debug/create-event", async (req, res) => {
-  const event = await Event.create({
-    type: "weather",
-    severity: 2,
-    location: { lat: 52.2297, lng: 21.0122 },
-    data: {
-      temperature: 18,
-      condition: "cloudy"
-    }
-  });
-
-  res.json(event);
+const generateWeather = (lat, lng) => ({
+  type: "weather",
+  location: { lat, lng },
+  data: {
+    temperature: 12 + Math.random() * 18,
+    windspeed: Math.random() * 25
+  }
 });
 
-
-app.get("/api/debug/weather-event", async (req, res) => {
-  const event = await fetchWeatherAndCreateEvents();
-
-  // push to feed instantly
-  req.app.get("emitEvent")?.(event);
-
-  res.json(event);
+const generateTraffic = (lat, lng) => ({
+  type: "traffic",
+  location: { lat, lng },
+  data: {
+    congestion: Math.floor(Math.random() * 100)
+  }
 });
 
-app.get("/api/weather/generate", async (req, res) => {
-  const lat = parseFloat(req.query.lat);
-  const lng = parseFloat(req.query.lng);
-
-  const event = await fetchWeatherAndCreateEvents({ lat, lng });
-
-  // push to feed + map instantly
-  req.app.get("emitEvent")?.(event);
-
-  res.json(event);
+const generateDisaster = (lat, lng) => ({
+  type: "disaster",
+  location: { lat, lng },
+  data: {
+    severity: Math.floor(Math.random() * 5),
+    label: "No active disaster"
+  }
 });
 
+// ================= VIEWPORT INTELLIGENCE =================
+app.get("/api/layers/viewport", (req, res) => {
+  const lat = parseFloat(req.query.lat) || 52.2297;
+  const lng = parseFloat(req.query.lng) || 21.0122;
 
-// ================= EVENTS HELPER =================
-app.set("emitEvent", (event) => {
-  io.emit("event:new", event);
+  const layers = [
+    generateWeather(lat, lng),
+    generateTraffic(lat, lng),
+    generateDisaster(lat, lng)
+  ];
+
+  res.json(layers);
 });
 
-// ================= START SERVER =================
+// ================= START =================
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
