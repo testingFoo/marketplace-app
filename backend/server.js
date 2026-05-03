@@ -15,9 +15,10 @@ const driverRoutes = require("./routes/driver.routes");
 const profileRoutes = require("./routes/profile.routes");
 const eventRoutes = require("./routes/event.routes");
 
+
 //TEST
 const Event = require("./models/Event");
-
+const { fetchWeatherAndCreateEvents } = require("./services/weather.service");
 
 
 const app = express();
@@ -115,6 +116,16 @@ app.get("/api/debug/create-event", async (req, res) => {
       condition: "cloudy"
     }
   });
+
+  res.json(event);
+});
+
+
+app.get("/api/debug/weather-event", async (req, res) => {
+  const event = await fetchWeatherAndCreateEvents();
+
+  // push to feed instantly
+  req.app.get("emitEvent")?.(event);
 
   res.json(event);
 });
