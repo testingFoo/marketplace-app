@@ -1,114 +1,97 @@
 const express = require("express");
 const http = require("http");
-
 const cors = require("cors");
 const mongoose = require("mongoose");
 const { Server } = require("socket.io");
-const passport = require("passport");
 
-// ================= ROUTES (KEEP CORE ONLY) =================
-const activityRoutes = require("./routes/activity.routes");
 const authRoutes = require("./routes/auth.routes");
-const profileRoutes = require("./routes/profile.routes");
 const eventRoutes = require("./routes/event.routes");
+const activityRoutes = require("./routes/activity.routes");
 
 const Event = require("./models/Event");
 
 const app = express();
-app.use(express.static("public"));
-app.use(passport.initialize());
-
-// ================= MIDDLEWARE =================
 app.use(cors());
 app.use(express.json());
 
-// logger
-app.use((req, res, next) => {
-  console.log(`➡️ ${req.method} ${req.url}`);
-  next();
-});
-
-// ================= CORE ROUTES =================
-app.use("/api/auth", authRoutes);
-app.use("/api/profile", profileRoutes);
-app.use("/api/activity", activityRoutes);
-app.use("/api/events", eventRoutes);
-
-// ================= SERVER =================
 const server = http.createServer(app);
-
-// ================= SOCKET =================
-const io = new Server(server, {
-  cors: { origin: "*" }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 app.set("io", io);
 
-require("./sockets")(io);
-
+// ================= SOCKET =================
 io.on("connection", (socket) => {
-  console.log("🟢 connected:", socket.id);
+  console.log("🟢 client connected:", socket.id);
+});
+
+// ================= ROUTES (CLEAN CORE ONLY) =================
+app.use("/api/auth", authRoutes);
+app.use("/api/events", eventRoutes);
+app.use("/api/activity", activityRoutes);
+
+// ================= WEATHER (FREE API INTEGRATION) =================
+const fetch = require("node-fetch");
+const OPENWEATHER_KEY = "YOUR_KEY_HERE";
+
+app.get("/api/weather", async (req, res) => {
+  const { lat, lng } = req.query;
+
+  const r = await fetch(
+    `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&units=metric&appid=${OPENWEATHER_KEY}`
+  );
+
+  const data = await r.json();
+
+  const event = await Event.create({
+    type: "weather",
+    severity: data.main.temp > 30 ? 3 : 1,
+    location: { lat, lng },
+    data: {
+      temp: data.main.temp,
+      condition: data.weather?.[0]?.main,
+      wind: data.wind?.speed
+    }
+  });
+
+  io.emit("event:new", event);
+
+  res.json(event);
+});
+
+// ================= TRAFFIC (SIMPLIFIED LAYER) =================
+app.get("/api/traffic", (req, res) => {
+  res.json([
+    {
+      type: "traffic",
+      severity: 2,
+      location: { lat: 52.2297, lng: 21.0122 }
+    }
+  ]);
+});
+
+// ================= DISASTERS =================
+app.get("/api/disasters", (req, res) => {
+  res.json([
+    {
+      type: "disaster",
+      severity: 3,
+      location: { lat: 52.23, lng: 21.01 }
+    }
+  ]);
+});
+
+// ================= EVENTS FEED =================
+app.get("/api/events", async (req, res) => {
+  const events = await Event.find().sort({ createdAt: -1 }).limit(100);
+  res.json(events);
 });
 
 // ================= DB =================
-mongoose.set("debug", true);
-
-mongoose.connect(process.env.MONGO_URL)
-  .then(() => console.log("🟢 Mongo connected"))
-  .catch(err => console.log("🔴 Mongo error:", err));
-
-// ================= CLEAN ERROR HANDLER =================
-app.use((err, req, res, next) => {
-  console.log("🔥 ERROR:", err);
-  res.status(500).json({ error: err.message });
-});
-
-// ================= ONLY ONE CORE INTELLIGENCE API =================
-// (THIS replaces all debug weather endpoints)
-
-const generateWeather = (lat, lng) => ({
-  type: "weather",
-  location: { lat, lng },
-  data: {
-    temperature: 12 + Math.random() * 18,
-    windspeed: Math.random() * 25
-  }
-});
-
-const generateTraffic = (lat, lng) => ({
-  type: "traffic",
-  location: { lat, lng },
-  data: {
-    congestion: Math.floor(Math.random() * 100)
-  }
-});
-
-const generateDisaster = (lat, lng) => ({
-  type: "disaster",
-  location: { lat, lng },
-  data: {
-    severity: Math.floor(Math.random() * 5),
-    label: "No active disaster"
-  }
-});
-
-// ================= VIEWPORT INTELLIGENCE =================
-app.get("/api/layers/viewport", (req, res) => {
-  const lat = parseFloat(req.query.lat) || 52.2297;
-  const lng = parseFloat(req.query.lng) || 21.0122;
-
-  const layers = [
-    generateWeather(lat, lng),
-    generateTraffic(lat, lng),
-    generateDisaster(lat, lng)
-  ];
-
-  res.json(layers);
+mongoose.connect(process.env.MONGO_URL).then(() => {
+  console.log("🟢 Mongo connected");
 });
 
 // ================= START =================
-const PORT = process.env.PORT || 5000;
-
-server.listen(PORT, () => {
-  console.log("🚀 Server running on", PORT);
+server.listen(5000, () => {
+  console.log("🚀 Server running on 5000");
 });
