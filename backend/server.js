@@ -30,7 +30,7 @@ app.use("/api/events", eventRoutes);
 app.use("/api/activity", activityRoutes);
 
 // ================= WEATHER (FREE API INTEGRATION) =================
-const fetch = require("node-fetch");
+
 const OPENWEATHER_KEY = "YOUR_KEY_HERE";
 
 app.get("/api/weather", async (req, res) => {
