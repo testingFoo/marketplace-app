@@ -130,6 +130,18 @@ app.get("/api/debug/weather-event", async (req, res) => {
   res.json(event);
 });
 
+app.get("/api/weather/generate", async (req, res) => {
+  const lat = parseFloat(req.query.lat);
+  const lng = parseFloat(req.query.lng);
+
+  const event = await fetchWeatherAndCreateEvents({ lat, lng });
+
+  // push to feed + map instantly
+  req.app.get("emitEvent")?.(event);
+
+  res.json(event);
+});
+
 
 // ================= EVENTS HELPER =================
 app.set("emitEvent", (event) => {
