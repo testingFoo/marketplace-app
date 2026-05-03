@@ -28,6 +28,7 @@ app.use(cors());
 app.use(express.json());
 
 
+
 // 🔥 REQUEST LOGGER
 app.use((req, res, next) => {
   console.log(`➡️ ${req.method} ${req.url}`);
@@ -118,6 +119,11 @@ app.get("/api/debug/create-event", async (req, res) => {
   res.json(event);
 });
 
+
+// ================= EVENTS HELPER =================
+app.set("emitEvent", (event) => {
+  io.emit("event:new", event);
+});
 
 // ================= START SERVER =================
 const PORT = process.env.PORT || 5000;
