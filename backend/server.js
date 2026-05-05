@@ -31,7 +31,7 @@ app.use("/api/activity", activityRoutes);
 
 // ================= WEATHER (FREE API INTEGRATION) =================
 
-const OPENWEATHER_KEY = "YOUR_KEY_HERE";
+const OPENWEATHER_KEY = "4253e4fb9573140deb74d435e64da4ae";
 
 app.get("/api/weather", async (req, res) => {
   const { lat, lng } = req.query;
