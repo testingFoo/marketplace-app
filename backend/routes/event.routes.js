@@ -66,14 +66,29 @@ router.get("/disasters", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// ================= FEED =================
+
+// ================= FEED (GEOJSON READY) =================
 router.get("/", async (req, res) => {
   try {
-    const events = await Event.find()
-      .sort({ createdAt: -1 })
-      .limit(100);
+    const events = await Event.find().limit(100);
 
-    res.json(events);
+    const geojson = {
+      type: "FeatureCollection",
+      features: events.map((e) => ({
+        type: "Feature",
+        geometry: {
+          type: "Point",
+          coordinates: [e.location.lng, e.location.lat]
+        },
+        properties: {
+          type: e.type,
+          severity: e.severity,
+          data: e.data
+        }
+      }))
+    };
+
+    res.json(geojson);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
