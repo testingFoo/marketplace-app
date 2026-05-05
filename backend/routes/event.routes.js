@@ -55,20 +55,17 @@ router.get("/traffic", async (req, res) => {
 // ================= DISASTERS =================
 router.get("/disasters", async (req, res) => {
   try {
-    const { lat, lng } = req.query;
+    const events = await generateDisasterEvents();
 
-    const event = await generateDisasterEvent({ lat, lng });
+    events.forEach((e) => {
+      req.app.get("io").emit("event:new", e);
+    });
 
-    if (event) {
-      req.app.get("io").emit("event:new", event);
-    }
-
-    res.json(event || { message: "No disaster detected" });
+    res.json(events);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
 // ================= FEED =================
 router.get("/", async (req, res) => {
   try {
