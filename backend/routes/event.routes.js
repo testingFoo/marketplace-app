@@ -2,12 +2,15 @@ const router = require("express").Router();
 const Event = require("../models/Event");
 const { fetchWeatherAndCreateEvents } = require("../services/weather.service");
 
-// ================= WEATHER ENDPOINT =================
+// ================= WEATHER =================
 router.get("/weather", async (req, res) => {
   try {
     const { lat, lng } = req.query;
 
     const event = await fetchWeatherAndCreateEvents({ lat, lng });
+
+    // emit live update
+    req.app.get("io").emit("event:new", event);
 
     res.json(event);
   } catch (err) {
