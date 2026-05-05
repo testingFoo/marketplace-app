@@ -7,6 +7,7 @@ const { Server } = require("socket.io");
 const authRoutes = require("./routes/auth.routes");
 const eventRoutes = require("./routes/event.routes");
 const activityRoutes = require("./routes/activity.routes");
+const globalRoutes = require("./routes/global.routes");
 
 const Event = require("./models/Event");
 
@@ -28,6 +29,7 @@ io.on("connection", (socket) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/activity", activityRoutes);
+app.use("/api/global", globalRoutes);
 
 // ================= WEATHER (FREE API INTEGRATION) =================
 
