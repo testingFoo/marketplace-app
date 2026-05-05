@@ -31,17 +31,25 @@ app.use("/api/events", eventRoutes);
 app.use("/api/activity", activityRoutes);
 app.use("/api/global", globalRoutes);
 
-// ================= WEATHER (FREE API INTEGRATION) =================
-
-
-// ================= TRAFFIC (SIMPLIFIED LAYER) =================
-
-// ================= DISASTERS =================
-
-// ================= EVENTS FEED =================
 // ================= DB =================
 mongoose.connect(process.env.MONGO_URL).then(() => {
   console.log("🟢 Mongo connected");
+});
+
+  // ================= GLOBAL AUTO SYNC =================
+  setInterval(async () => {
+    try {
+      const { fetchEarthquakes } = require("./services/global.service");
+
+      const events = await fetchEarthquakes();
+
+      io.emit("global:update", events);
+
+      console.log("🌍 Auto sync:", events.length);
+    } catch (err) {
+      console.log("Global sync error:", err.message);
+    }
+  }, 10 * 60 * 1000); // every 10 minutes
 });
 
 // ================= START =================
