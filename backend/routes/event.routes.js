@@ -1,6 +1,9 @@
 const router = require("express").Router();
 const Event = require("../models/Event");
+
 const { fetchWeatherAndCreateEvents } = require("../services/weather.service");
+const { generateTrafficEvent } = require("../services/traffic.service");
+const { generateDisasterEvent } = require("../services/disaster.service");
 
 // ================= WEATHER =================
 router.get("/weather", async (req, res) => {
@@ -9,7 +12,6 @@ router.get("/weather", async (req, res) => {
 
     const event = await fetchWeatherAndCreateEvents({ lat, lng });
 
-    // emit live update
     req.app.get("io").emit("event:new", event);
 
     res.json(event);
@@ -18,7 +20,39 @@ router.get("/weather", async (req, res) => {
   }
 });
 
-// ================= ALL EVENTS =================
+// ================= TRAFFIC =================
+router.get("/traffic", async (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+
+    const event = await generateTrafficEvent({ lat, lng });
+
+    req.app.get("io").emit("event:new", event);
+
+    res.json(event);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================= DISASTERS =================
+router.get("/disasters", async (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+
+    const event = await generateDisasterEvent({ lat, lng });
+
+    if (event) {
+      req.app.get("io").emit("event:new", event);
+    }
+
+    res.json(event || { message: "No disaster detected" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================= FEED =================
 router.get("/", async (req, res) => {
   try {
     const events = await Event.find()
