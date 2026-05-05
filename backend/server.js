@@ -31,10 +31,10 @@ app.use("/api/events", eventRoutes);
 app.use("/api/activity", activityRoutes);
 app.use("/api/global", globalRoutes);
 
+
 // ================= DB =================
 mongoose.connect(process.env.MONGO_URL).then(() => {
   console.log("🟢 Mongo connected");
-});
 
   // ================= GLOBAL AUTO SYNC =================
   setInterval(async () => {
