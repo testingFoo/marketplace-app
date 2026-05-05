@@ -1,11 +1,15 @@
 const router = require("express").Router();
 const Event = require("../models/Event");
 
-const { fetchWeatherAndCreateEvents } = require("../services/weather.service");
+const {
+  fetchWeatherAndCreateEvents,
+  fetchWeatherLive
+} = require("../services/weather.service");
+
 const { generateTrafficEvent } = require("../services/traffic.service");
 const { generateDisasterEvent } = require("../services/disaster.service");
 
-// ================= WEATHER =================
+// ================= WEATHER (EVENT) =================
 router.get("/weather", async (req, res) => {
   try {
     const { lat, lng } = req.query;
@@ -15,6 +19,19 @@ router.get("/weather", async (req, res) => {
     req.app.get("io").emit("event:new", event);
 
     res.json(event);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================= WEATHER LIVE (NO DB) =================
+router.get("/weather/live", async (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+
+    const data = await fetchWeatherLive({ lat, lng });
+
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
