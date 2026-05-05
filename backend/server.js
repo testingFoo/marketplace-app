@@ -31,61 +31,12 @@ app.use("/api/activity", activityRoutes);
 
 // ================= WEATHER (FREE API INTEGRATION) =================
 
-const OPENWEATHER_KEY = "4253e4fb9573140deb74d435e64da4ae";
-
-app.get("/api/weather", async (req, res) => {
-  const { lat, lng } = req.query;
-
-  const r = await fetch(
-    `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&units=metric&appid=${OPENWEATHER_KEY}`
-  );
-
-  const data = await r.json();
-
-  const event = await Event.create({
-    type: "weather",
-    severity: data.main.temp > 30 ? 3 : 1,
-    location: { lat, lng },
-    data: {
-      temp: data.main.temp,
-      condition: data.weather?.[0]?.main,
-      wind: data.wind?.speed
-    }
-  });
-
-  io.emit("event:new", event);
-
-  res.json(event);
-});
 
 // ================= TRAFFIC (SIMPLIFIED LAYER) =================
-app.get("/api/traffic", (req, res) => {
-  res.json([
-    {
-      type: "traffic",
-      severity: 2,
-      location: { lat: 52.2297, lng: 21.0122 }
-    }
-  ]);
-});
 
 // ================= DISASTERS =================
-app.get("/api/disasters", (req, res) => {
-  res.json([
-    {
-      type: "disaster",
-      severity: 3,
-      location: { lat: 52.23, lng: 21.01 }
-    }
-  ]);
-});
 
 // ================= EVENTS FEED =================
-app.get("/api/events", async (req, res) => {
-  const events = await Event.find().sort({ createdAt: -1 }).limit(100);
-  res.json(events);
-});
-
 // ================= DB =================
 mongoose.connect(process.env.MONGO_URL).then(() => {
   console.log("🟢 Mongo connected");
