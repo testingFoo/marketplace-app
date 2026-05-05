@@ -11,6 +11,10 @@ async function fetchWeatherAndCreateEvents({ lat, lng }) {
 
   const data = await r.json();
 
+  if (!data || !data.main) {
+  throw new Error("Weather API failed: " + JSON.stringify(data));
+}
+
   const event = await Event.create({
     type: "weather",
     severity: data.main.temp > 30 ? 3 : 1,
