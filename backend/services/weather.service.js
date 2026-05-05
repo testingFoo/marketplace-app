@@ -1,37 +1,32 @@
 const Event = require("../models/Event");
 
 async function fetchWeatherAndCreateEvents({ lat, lng }) {
-  try {
-    // fallback to Warsaw if none provided
-    const safeLat = lat || 52.2297;
-    const safeLng = lng || 21.0122;
-
-    const res = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${safeLat}&longitude=${safeLng}&current_weather=true`
-    );
-
-    const data = await res.json();
-    const weather = data.current_weather;
-
-    const event = await Event.create({
-      type: "weather",
-      severity: weather.windspeed > 20 ? 4 : 2,
-      location: {
-        lat: safeLat,
-        lng: safeLng
-      },
-      data: {
-        temperature: weather.temperature,
-        windspeed: weather.windspeed,
-        winddirection: weather.winddirection
-      },
-      source: "api"
-    });
-
-    return event;
-  } catch (err) {
-    console.log("Weather service error:", err);
+  if (!lat || !lng) {
+    throw new Error("Missing lat/lng");
   }
+
+  const r = await fetch(
+    `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&units=metric&appid=${process.env.OPENWEATHER_KEY}`
+  );
+
+  const data = await r.json();
+
+  const event = await Event.create({
+    type: "weather",
+    severity: data.main.temp > 30 ? 3 : 1,
+    location: {
+      lat: parseFloat(lat),
+      lng: parseFloat(lng)
+    },
+    data: {
+      temp: data.main.temp,
+      wind: data.wind?.speed,
+      description: data.weather?.[0]?.main
+    },
+    source: "api"
+  });
+
+  return event;
 }
 
 module.exports = { fetchWeatherAndCreateEvents };
