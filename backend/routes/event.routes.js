@@ -7,7 +7,7 @@ const {
 } = require("../services/weather.service");
 
 const { generateTrafficEvent } = require("../services/traffic.service");
-const { generateDisasterEvent } = require("../services/disaster.service");
+const { generateDisasterEvents } = require("../services/disaster.service");
 
 // ================= WEATHER (EVENT) =================
 router.get("/weather", async (req, res) => {
