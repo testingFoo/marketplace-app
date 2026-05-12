@@ -9,6 +9,8 @@ router.get("/sync", async (req, res) => {
 
   try {
 
+    const start = Date.now();
+
     const events = await fetchGlobalEvents();
 
     req.app.get("io").emit(
@@ -16,14 +18,18 @@ router.get("/sync", async (req, res) => {
       events
     );
 
+    const ms = Date.now() - start;
+
+    // ✅ LIGHT RESPONSE ONLY
     res.json({
       success: true,
-      count: events.length,
-      events
+      inserted: events.length,
+      tookMs: ms
     });
 
   } catch (err) {
 
+    console.log("GLOBAL SYNC ERROR:");
     console.log(err);
 
     res.status(500).json({
