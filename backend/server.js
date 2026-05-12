@@ -31,6 +31,7 @@ app.use("/api/events", eventRoutes);
 app.use("/api/activity", activityRoutes);
 app.use("/api/global", globalRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/search", require("./routes/search.routes"));
 
 // ================= DB =================
 mongoose.connect(process.env.MONGO_URL).then(() => {
