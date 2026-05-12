@@ -1,19 +1,34 @@
 const router = require("express").Router();
-const { fetchEarthquakes } = require("../services/global.service");
 
-// ================= SYNC GLOBAL DATA =================
+const {
+  fetchGlobalEvents
+} = require("../services/global.service");
+
+// ================= GLOBAL SYNC =================
 router.get("/sync", async (req, res) => {
-  try {
-    const events = await fetchEarthquakes();
 
-    req.app.get("io").emit("global:update", events);
+  try {
+
+    const events = await fetchGlobalEvents();
+
+    req.app.get("io").emit(
+      "global:update",
+      events
+    );
 
     res.json({
       success: true,
-      count: events.length
+      count: events.length,
+      events
     });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    console.log(err);
+
+    res.status(500).json({
+      error: err.message
+    });
   }
 });
 
