@@ -8,6 +8,7 @@ async function fetchEarthquakes() {
 
   // ✅ SAFE TEXT FIRST
   const text = await response.text();
+  console.log(text.slice(0, 500));
 
   let data;
 
