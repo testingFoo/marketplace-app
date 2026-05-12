@@ -7,11 +7,21 @@ const {
 // ================= GLOBAL SYNC =================
 router.get("/sync", async (req, res) => {
 
+  const timeout = setTimeout(() => {
+
+    res.status(504).json({
+      error: "Sync timeout"
+    });
+
+  }, 25000);
+
   try {
 
     const start = Date.now();
 
     const events = await fetchGlobalEvents();
+
+    clearTimeout(timeout);
 
     req.app.get("io").emit(
       "global:update",
@@ -20,7 +30,6 @@ router.get("/sync", async (req, res) => {
 
     const ms = Date.now() - start;
 
-    // ✅ LIGHT RESPONSE ONLY
     res.json({
       success: true,
       inserted: events.length,
@@ -28,6 +37,8 @@ router.get("/sync", async (req, res) => {
     });
 
   } catch (err) {
+
+    clearTimeout(timeout);
 
     console.log("GLOBAL SYNC ERROR:");
     console.log(err);
