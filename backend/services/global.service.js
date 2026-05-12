@@ -28,7 +28,15 @@ async function fetchGlobalEvents() {
 
   const events = [];
 
-  for (const e of data.events || []) {
+  const existingIds = await Event.distinct(
+  "data.eonetId"
+);
+
+for (const e of data.events || []) {
+
+  if (existingIds.includes(e.id)) {
+    continue;
+  }
 
     const geo = e.geometry?.[0];
 
