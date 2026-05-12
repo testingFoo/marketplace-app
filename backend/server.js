@@ -8,7 +8,7 @@ const authRoutes = require("./routes/auth.routes");
 const eventRoutes = require("./routes/event.routes");
 const activityRoutes = require("./routes/activity.routes");
 const globalRoutes = require("./routes/global.routes");
-
+const userRoutes = require("./routes/user.routes")
 const Event = require("./models/Event");
 
 const app = express();
@@ -30,7 +30,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/activity", activityRoutes);
 app.use("/api/global", globalRoutes);
-
+app.use("/api/user", userRoutes);
 
 // ================= DB =================
 mongoose.connect(process.env.MONGO_URL).then(() => {
