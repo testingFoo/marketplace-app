@@ -37,20 +37,31 @@ mongoose.connect(process.env.MONGO_URL).then(() => {
   console.log("🟢 Mongo connected");
 
   // ================= GLOBAL AUTO SYNC =================
-  setInterval(async () => {
-    try {
-      const { fetchEarthquakes } = require("./services/global.service");
 
-      const events = await fetchEarthquakes();
+ setInterval(async () => {
+    try {
+
+      const {
+        fetchGlobalEvents
+      } = require("./services/global.service");
+
+      const events = await fetchGlobalEvents();
 
       io.emit("global:update", events);
 
       console.log("🌍 Auto sync:", events.length);
+
     } catch (err) {
-      console.log("Global sync error:", err.message);
+
+      console.log(
+        "Global sync error:",
+        err.message
+      );
     }
+
   }, 10 * 60 * 1000); // every 10 minutes
 });
+  
 
 // ================= START =================
 server.listen(5000, () => {
