@@ -3,6 +3,8 @@ const Event = require("../models/Event");
 // ================= NASA EONET =================
 async function fetchGlobalEvents() {
 
+  console.log("🌍 STARTING NASA FETCH");
+
   const response = await fetch(
     "https://eonet.gsfc.nasa.gov/api/v3/events",
     {
@@ -13,30 +15,56 @@ async function fetchGlobalEvents() {
     }
   );
 
+  console.log("✅ NASA RESPONSE:", response.status);
+
   const text = await response.text();
+
+  console.log("📦 RESPONSE LENGTH:", text.length);
 
   let data;
 
   try {
-    data = JSON.parse(text);
-  } catch (err) {
-    console.log("NASA RESPONSE:");
-    console.log(text);
 
-    throw new Error("NASA EONET returned invalid JSON");
+    data = JSON.parse(text);
+
+    console.log(
+      "✅ JSON PARSED:",
+      data.events?.length || 0
+    );
+
+  } catch (err) {
+
+    console.log("❌ JSON PARSE FAILED");
+    console.log(text.slice(0, 500));
+
+    throw new Error("NASA JSON parse failed");
   }
+
+  // ================= LOAD EXISTING IDS =================
+  console.log("📂 LOADING EXISTING IDS");
+
+  const existingIds = await Event.distinct(
+    "data.eonetId"
+  );
+
+  console.log(
+    "✅ EXISTING IDS:",
+    existingIds.length
+  );
 
   const events = [];
 
-  const existingIds = await Event.distinct(
-  "data.eonetId"
-);
+  // ================= INSERT =================
+  for (const e of data.events || []) {
 
-for (const e of data.events || []) {
+    if (events.length >= 50) {
+      console.log("🛑 LIMIT REACHED");
+      break;
+    }
 
-  if (existingIds.includes(e.id)) {
-    continue;
-  }
+    if (existingIds.includes(e.id)) {
+      continue;
+    }
 
     const geo = e.geometry?.[0];
 
@@ -45,17 +73,9 @@ for (const e of data.events || []) {
     const lng = geo.coordinates[0];
     const lat = geo.coordinates[1];
 
-    // avoid duplicates
-    const exists = await Event.findOne({
-      "data.eonetId": e.id
-    });
-
-    if (exists) continue;
-
     const category =
       e.categories?.[0]?.title || "Disaster";
 
-    // dynamic severity
     let severity = 2;
 
     if (
@@ -71,6 +91,11 @@ for (const e of data.events || []) {
       severity = 4;
     }
 
+    console.log(
+      "➕ INSERTING:",
+      e.title
+    );
+
     const event = await Event.create({
       type: "disaster",
 
@@ -84,8 +109,7 @@ for (const e of data.events || []) {
       data: {
         eonetId: e.id,
         title: e.title,
-        category,
-        source: e.sources?.[0]?.id
+        category
       },
 
       source: "nasa"
@@ -93,6 +117,11 @@ for (const e of data.events || []) {
 
     events.push(event);
   }
+
+  console.log(
+    "✅ INSERT COMPLETE:",
+    events.length
+  );
 
   return events;
 }
