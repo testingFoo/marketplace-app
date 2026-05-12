@@ -11,20 +11,22 @@ router.post("/login", ctrl.login);
 
 // ================= ME =================
 router.get("/me", async (req, res) => {
-  const auth = req.headers.authorization;
-
-  if (!auth) return res.json({ user: null });
-
   try {
+    const auth = req.headers.authorization;
+
+    if (!auth) {
+      return res.status(401).json({ user: null });
+    }
+
     const token = auth.split(" ")[1];
     const decoded = jwt.verify(token, "SECRET");
 
     const user = await User.findById(decoded.id);
 
-    res.json({ user });
+    return res.json({ user });
 
-  } catch (e) {
-    res.json({ user: null });
+  } catch (err) {
+    return res.status(401).json({ user: null });
   }
 });
 
