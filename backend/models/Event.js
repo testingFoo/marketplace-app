@@ -1,17 +1,16 @@
 const mongoose = require("mongoose");
 
 const EventSchema = new mongoose.Schema({
+
   type: {
     type: String,
     required: true,
     index: true
-    // weather | traffic | disaster | ride | user_action | etc
   },
 
   severity: {
     type: Number,
     default: 1
-    // 1 = low, 5 = critical
   },
 
   location: {
@@ -30,8 +29,8 @@ const EventSchema = new mongoose.Schema({
 
   source: {
     type: String,
-    default: "system"
-    // api | user | ai | system
+    default: "system",
+    index: true
   },
 
   data: {
@@ -44,6 +43,12 @@ const EventSchema = new mongoose.Schema({
     default: Date.now,
     index: true
   }
+
+});
+
+// ✅ IMPORTANT FOR NASA DUPLICATE CHECKS
+EventSchema.index({
+  "data.eonetId": 1
 });
 
 module.exports = mongoose.model("Event", EventSchema);
