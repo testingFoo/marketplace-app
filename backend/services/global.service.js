@@ -15,16 +15,31 @@ async function fetchEarthquakes() {
   for (const f of features) {
     const [lng, lat] = f.geometry.coordinates;
 
+    // ✅ avoid duplicates
+    const existing = await Event.findOne({
+      "data.usgsId": f.id
+    });
+
+    if (existing) continue;
+
     const event = await Event.create({
       type: "disaster",
-      severity: Math.min(Math.round(f.properties.mag), 5),
+
+      severity: Math.min(
+        Math.max(Math.round(f.properties.mag || 1), 1),
+        5
+      ),
+
       location: { lat, lng },
+
       data: {
+        usgsId: f.id,
         title: f.properties.title,
         magnitude: f.properties.mag,
         place: f.properties.place,
         time: f.properties.time
       },
+
       source: "usgs"
     });
 
