@@ -1,56 +1,72 @@
 const Event = require("../models/Event");
 
-async function fetchEarthquakes() {
+// ================= NASA EONET =================
+async function fetchGlobalEvents() {
 
-const response = await fetch(
-  "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/medium_day.geojson",
-  {
-    headers: {
-      "User-Agent": "Mozilla/5.0",
-      "Accept": "application/json"
+  const response = await fetch(
+    "https://eonet.gsfc.nasa.gov/api/v3/events",
+    {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+      }
     }
-  }
-);
+  );
 
-  // ✅ SAFE TEXT FIRST
   const text = await response.text();
-  console.log(text.slice(0, 500));
 
   let data;
 
   try {
     data = JSON.parse(text);
   } catch (err) {
-    console.log("USGS INVALID RESPONSE:");
+    console.log("NASA RESPONSE:");
     console.log(text);
 
-    throw new Error("USGS returned invalid JSON");
+    throw new Error("NASA EONET returned invalid JSON");
   }
-
-  const features = data.features || [];
 
   const events = [];
 
-  for (const f of features) {
+  for (const e of data.events || []) {
 
-    if (!f.geometry?.coordinates) continue;
+    const geo = e.geometry?.[0];
 
-    const [lng, lat] = f.geometry.coordinates;
+    if (!geo?.coordinates) continue;
 
-    // prevent duplicates
+    const lng = geo.coordinates[0];
+    const lat = geo.coordinates[1];
+
+    // avoid duplicates
     const exists = await Event.findOne({
-      "data.usgsId": f.id
+      "data.eonetId": e.id
     });
 
     if (exists) continue;
 
+    const category =
+      e.categories?.[0]?.title || "Disaster";
+
+    // dynamic severity
+    let severity = 2;
+
+    if (
+      category.includes("Wildfires") ||
+      category.includes("Volcanoes")
+    ) {
+      severity = 5;
+    }
+
+    if (
+      category.includes("Severe Storms")
+    ) {
+      severity = 4;
+    }
+
     const event = await Event.create({
       type: "disaster",
 
-      severity: Math.min(
-        Math.max(Math.round(f.properties.mag || 1), 1),
-        5
-      ),
+      severity,
 
       location: {
         lat,
@@ -58,14 +74,13 @@ const response = await fetch(
       },
 
       data: {
-        usgsId: f.id,
-        title: f.properties.title,
-        magnitude: f.properties.mag,
-        place: f.properties.place,
-        time: f.properties.time
+        eonetId: e.id,
+        title: e.title,
+        category,
+        source: e.sources?.[0]?.id
       },
 
-      source: "usgs"
+      source: "nasa"
     });
 
     events.push(event);
@@ -74,4 +89,6 @@ const response = await fetch(
   return events;
 }
 
-module.exports = { fetchEarthquakes };
+module.exports = {
+  fetchGlobalEvents
+};
