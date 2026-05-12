@@ -5,24 +5,22 @@ const auth = require("../middleware/auth.middleware");
 // ================= UPDATE PROFILE =================
 router.put("/update", auth, async (req, res) => {
   try {
+    console.log("USER:", req.user);
+    console.log("BODY:", req.body);
+
     const updated = await User.findByIdAndUpdate(
       req.user.id,
       {
         firstName: req.body.firstName,
         lastName: req.body.lastName,
-
         sex: req.body.sex,
         dob: req.body.dob,
-
         bornCity: req.body.bornCity,
         currentCity: req.body.currentCity,
         country: req.body.country,
-
         hasBusiness: req.body.hasBusiness,
         businessName: req.body.businessName,
-
-        interests: req.body.interests,
-        profileImage: req.body.profileImage
+        interests: req.body.interests
       },
       { new: true }
     );
@@ -30,11 +28,10 @@ router.put("/update", auth, async (req, res) => {
     return res.json({ user: updated });
 
   } catch (err) {
-    console.log(err);
+    console.log("UPDATE ERROR:", err);
     return res.status(500).json({ error: "Update failed" });
   }
 });
-
 // ================= SEND CONNECTION REQUEST =================
 router.post("/connect/:id", auth, async (req, res) => {
   try {
