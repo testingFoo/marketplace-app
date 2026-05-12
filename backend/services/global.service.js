@@ -2,9 +2,15 @@ const Event = require("../models/Event");
 
 async function fetchEarthquakes() {
 
-  const response = await fetch(
-    "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/medium_day.geojson"
-  );
+const response = await fetch(
+  "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/medium_day.geojson",
+  {
+    headers: {
+      "User-Agent": "Mozilla/5.0",
+      "Accept": "application/json"
+    }
+  }
+);
 
   // ✅ SAFE TEXT FIRST
   const text = await response.text();
