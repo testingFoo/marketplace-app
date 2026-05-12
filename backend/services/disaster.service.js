@@ -3,7 +3,18 @@ const Event = require("../models/Event");
 // NASA EONET
 async function fetchEONETEvents() {
   const res = await fetch("https://eonet.gsfc.nasa.gov/api/v3/events");
-  const data = await res.json();
+ const text = await res.text();
+
+let data;
+
+try {
+  data = JSON.parse(text);
+} catch (err) {
+  console.log("NASA INVALID RESPONSE:");
+  console.log(text);
+
+  return [];
+}
 
   return data.events.map((e) => ({
     type: "disaster",
