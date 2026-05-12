@@ -12,20 +12,24 @@ exports.register = async (req, res) => {
       password
     } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password required" });
-    }
+    const exists = await User.findOne({ email });
 
-    const existing = await User.findOne({ email });
-    if (existing) {
-      return res.status(400).json({ error: "Email already exists" });
+    if (exists) {
+      return res.status(400).json({ error: "User already exists" });
     }
 
     const hashed = await bcrypt.hash(password, 10);
 
     const user = await User.create({
+      firstName,
+      lastName,
       email,
-      password: hashed
+      password: hashed,
+
+      interests: [],
+      connections: [],
+      sentRequests: [],
+      receivedRequests: []
     });
 
     const token = jwt.sign(
@@ -34,22 +38,14 @@ exports.register = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.json({
+    return res.json({
       token,
-      user: {
-        id: user._id,
-        email: user.email,
-        fistName: user.firstName,
-        lastName: user.lastName
-      }
+      user
     });
 
   } catch (err) {
-    console.log("REGISTER ERROR FULL:", err);
-    res.status(500).json({
-      error: "Server error",
-      message: err.message
-    });
+    console.log(err);
+    return res.status(500).json({ error: "Register failed" });
   }
 };
 
@@ -59,10 +55,16 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ error: "no user" });
+
+    if (!user) {
+      return res.status(400).json({ error: "User not found" });
+    }
 
     const ok = await bcrypt.compare(password, user.password);
-    if (!ok) return res.status(401).json({ error: "wrong password" });
+
+    if (!ok) {
+      return res.status(400).json({ error: "Invalid password" });
+    }
 
     const token = jwt.sign(
       { id: user._id },
@@ -70,21 +72,13 @@ exports.login = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.json({
+    return res.json({
       token,
-      user: {
-        id: user._id,
-        email: user.email,
-      }
+      user
     });
 
   } catch (err) {
-    console.log("LOGIN ERROR:", err);
-    res.status(500).json({ error: "Login failed" });
+    console.log(err);
+    return res.status(500).json({ error: "Login failed" });
   }
-};
-
-// ================= ME =================
-exports.me = async (req, res) => {
-  res.json({ user: req.user });
 };
