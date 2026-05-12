@@ -1,26 +1,41 @@
 const Event = require("../models/Event");
 
-// ================= USGS EARTHQUAKES =================
 async function fetchEarthquakes() {
-  const res = await fetch(
+
+  const response = await fetch(
     "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/medium_day.geojson"
   );
 
-  const data = await res.json();
+  // ✅ SAFE TEXT FIRST
+  const text = await response.text();
+
+  let data;
+
+  try {
+    data = JSON.parse(text);
+  } catch (err) {
+    console.log("USGS INVALID RESPONSE:");
+    console.log(text);
+
+    throw new Error("USGS returned invalid JSON");
+  }
 
   const features = data.features || [];
 
   const events = [];
 
   for (const f of features) {
+
+    if (!f.geometry?.coordinates) continue;
+
     const [lng, lat] = f.geometry.coordinates;
 
-    // ✅ avoid duplicates
-    const existing = await Event.findOne({
+    // prevent duplicates
+    const exists = await Event.findOne({
       "data.usgsId": f.id
     });
 
-    if (existing) continue;
+    if (exists) continue;
 
     const event = await Event.create({
       type: "disaster",
@@ -30,7 +45,10 @@ async function fetchEarthquakes() {
         5
       ),
 
-      location: { lat, lng },
+      location: {
+        lat,
+        lng
+      },
 
       data: {
         usgsId: f.id,
