@@ -9,7 +9,7 @@ const WalletSchema = new mongoose.Schema({
 
   balance: {
     type: Number,
-    default: 10 // starting bonus
+    default: 10
   },
 
   currency: {
@@ -20,14 +20,11 @@ const WalletSchema = new mongoose.Schema({
   transactions: [
     {
       type: {
-        type: String, // "ride", "purchase", "deposit", "withdraw"
+        type: String,
         required: true
       },
-
       amount: Number,
-
       meta: Object,
-
       createdAt: {
         type: Date,
         default: Date.now
