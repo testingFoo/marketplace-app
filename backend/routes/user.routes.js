@@ -6,6 +6,14 @@ const auth = require("../middleware/auth.middleware");
 router.get("/me", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id)
+      .populate(
+        "receivedRequests",
+        "firstName lastName currentCity country"
+      )
+      .populate(
+        "connections",
+        "firstName lastName"
+      )
       .select("-password");
 
     return res.json({ user });
