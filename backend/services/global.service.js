@@ -1,67 +1,98 @@
-const Event = require("../models/Event");
+const Event = require("../models/Event"); 
 
-async function fetchGlobalEvents() {
+// ================= NASA EONET =================
+async function fetchGlobalEvents() { 
+  console.log("🌍 STARTING NASA FETCH"); 
+
   const response = await fetch(
-    "https://eonet.gsfc.nasa.gov/api/v3/events",
+    "https://eonet.gsfc.nasa.gov/api/v3/events", 
     {
       headers: {
-        "User-Agent": "Mozilla/5.0",
-        Accept: "application/json"
+        "User-Agent": "Mozilla/5.0", 
+        "Accept": "application/json"
       }
     }
-  );
+  ); 
 
-  const text = await response.text();
+  console.log("✅ NASA RESPONSE:", response.status); 
 
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error("NASA parse failed");
-  }
+  const text = await response.text(); 
+  console.log("📦 RESPONSE LENGTH:", text.length); 
 
-  const existing = new Set(
-    await Event.find({ "data.eonetId": { $exists: true } }).distinct(
-      "data.eonetId"
-    )
-  );
+  let data; 
 
-  const events = [];
+  try { 
+    data = JSON.parse(text); 
+    console.log(
+      "✅ JSON PARSED:", 
+      data.events?.length || 0
+    ); 
+  } catch (err) { 
+    console.log("❌ JSON PARSE FAILED"); 
+    console.log(text.slice(0, 500)); 
+    throw new Error("NASA JSON parse failed"); 
+  } 
 
-  for (const e of data.events || []) {
-    if (events.length >= 50) break;
-    if (existing.has(e.id)) continue;
+  // ================= LOAD EXISTING IDS =================
+  console.log("📂 LOADING EXISTING IDS"); 
 
-    const geo = e.geometry?.[0];
-    if (!geo?.coordinates) continue;
+  const existingIds = await Event.distinct("data.eonetId"); 
 
-    const [lng, lat] = geo.coordinates;
+  console.log("✅ EXISTING IDS:", existingIds.length); 
 
-    const category = e.categories?.[0]?.title || "Disaster";
+  const events = []; 
 
-    const severity =
-      category.includes("Wildfires") || category.includes("Volcanoes")
-        ? 5
-        : category.includes("Storms")
-        ? 4
-        : 2;
+  // ================= INSERT =================
+  for (const e of data.events || []) { 
+    if (events.length >= 50) { 
+      console.log("🛑 LIMIT REACHED"); 
+      break; 
+    } 
 
-    const event = await Event.create({
-      type: "disaster",
-      severity,
-      location: { lat, lng },
-      data: {
-        eonetId: e.id,
-        title: e.title,
-        category
-      },
-      source: "nasa"
-    });
+    if (existingIds.includes(e.id)) { 
+      continue; 
+    } 
 
-    events.push(event);
-  }
+    const geo = e.geometry?.[0]; 
+    if (!geo?.coordinates) continue; 
 
-  return events;
-}
+    const lng = geo.coordinates[0]; 
+    const lat = geo.coordinates[1]; 
+
+    const category = e.categories?.[0]?.title || "Disaster"; 
+
+    let severity = 2; 
+
+    if (
+      category.includes("Wildfires") || 
+      category.includes("Volcanoes")
+    ) { 
+      severity = 5; 
+    } 
+
+    if (category.includes("Severe Storms")) { 
+      severity = 4; 
+    } 
+
+    console.log("➕ INSERTING:", e.title); 
+
+    const event = await Event.create({ 
+      type: "disaster", 
+      severity, 
+      location: { lat, lng }, 
+      data: { 
+        eonetId: e.id, 
+        title: e.title, 
+        category 
+      }, 
+      source: "nasa" 
+    }); 
+
+    events.push(event); 
+  } 
+
+  console.log("✅ INSERT COMPLETE:", events.length); 
+  return events; 
+} 
 
 module.exports = { fetchGlobalEvents };
