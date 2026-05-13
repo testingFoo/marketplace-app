@@ -2,15 +2,10 @@ const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-// ================= REGISTER =================
+// REGISTER
 exports.register = async (req, res) => {
   try {
-    const {
-      firstName,
-      lastName,
-      email,
-      password
-    } = req.body;
+    const { firstName, lastName, email, password } = req.body;
 
     const exists = await User.findOne({ email });
 
@@ -25,7 +20,6 @@ exports.register = async (req, res) => {
       lastName,
       email,
       password: hashed,
-
       interests: [],
       connections: [],
       sentRequests: [],
@@ -34,14 +28,11 @@ exports.register = async (req, res) => {
 
     const token = jwt.sign(
       { id: user._id },
-      "SECRET",
+      process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    return res.json({
-      token,
-      user
-    });
+    return res.json({ token, user });
 
   } catch (err) {
     console.log(err);
@@ -49,7 +40,7 @@ exports.register = async (req, res) => {
   }
 };
 
-// ================= LOGIN =================
+// LOGIN
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -68,14 +59,11 @@ exports.login = async (req, res) => {
 
     const token = jwt.sign(
       { id: user._id },
-      "SECRET",
+      process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    return res.json({
-      token,
-      user
-    });
+    return res.json({ token, user });
 
   } catch (err) {
     console.log(err);
