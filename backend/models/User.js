@@ -3,13 +3,20 @@ const mongoose = require("mongoose");
 const UserSchema = new mongoose.Schema({
   // ================= BASIC =================
   firstName: String,
+
   lastName: String,
-  email: { type: String, unique: true },
+
+  email: {
+    type: String,
+    unique: true,
+  },
+
   password: String,
 
   // ================= PROFILE =================
   sex: String,
   dob: Date,
+
   profileImage: String, // URL from multer/cloud storage
 
   // ================= GEO =================
@@ -18,32 +25,46 @@ const UserSchema = new mongoose.Schema({
   country: String,
 
   // ================= BUSINESS =================
-  hasBusiness: { type: Boolean, default: false },
+  hasBusiness: {
+    type: Boolean,
+    default: false,
+  },
+
   businessName: String,
 
   // ================= INTERESTS =================
   interests: {
     type: [String],
-    default: []
+    default: [],
   },
 
   // ================= SOCIAL GRAPH =================
   connections: [
-    { type: mongoose.Schema.Types.ObjectId, ref: "User" }
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
   ],
-
   sentRequests: [
-    { type: mongoose.Schema.Types.ObjectId, ref: "User" }
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
   ],
-
   receivedRequests: [
-    { type: mongoose.Schema.Types.ObjectId, ref: "User" }
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
   ],
 
   createdAt: {
     type: Date,
-    default: Date.now
-  }
+    default: Date.now,
+  },
 });
 
-module.exports = mongoose.model("User", UserSchema);
+module.exports = mongoose.model(
+  "User",
+  UserSchema
+);
