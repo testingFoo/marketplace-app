@@ -1,89 +1,104 @@
-const Event = require("../models/Event");
+const Event = require("../models/Event"); 
 
-const cache = new Map();
-const TTL = 1000 * 60 * 5;
+// ================= SIMPLE IN-MEMORY CACHE =================
+const cache = new Map(); 
+const TTL = 1000 * 60 * 5; // 5 minutes
 
-function key(lat, lng) {
-  return `${Number(lat).toFixed(2)},${Number(lng).toFixed(2)}`;
-}
+function getCacheKey(lat, lng) { 
+  return `${lat.toFixed(2)},${lng.toFixed(2)}`; 
+} 
 
-function get(k) {
-  const v = cache.get(k);
-  if (!v) return null;
-  if (Date.now() > v.expiry) {
-    cache.delete(k);
-    return null;
-  }
-  return v.data;
-}
+function getCached(key) { 
+  const entry = cache.get(key); 
+  if (!entry) return null; 
 
-function set(k, data) {
-  cache.set(k, {
-    data,
-    expiry: Date.now() + TTL
-  });
-}
+  if (Date.now() > entry.expiry) { 
+    cache.delete(key); 
+    return null; 
+  } 
 
-// CREATE EVENT VERSION
-async function fetchWeatherAndCreateEvents({ lat, lng }) {
-  if (!lat || !lng) throw new Error("Missing lat/lng");
+  return entry.data; 
+} 
 
-  const r = await fetch(
-    `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&units=metric&appid=${process.env.OPENWEATHER_KEY}`
-  );
+function setCache(key, data) { 
+  cache.set(key, { 
+    data, 
+    expiry: Date.now() + TTL 
+  }); 
+} 
 
-  if (!r.ok) {
-    throw new Error(`Weather API error ${r.status}`);
-  }
-
-  const data = await r.json();
-
-  const event = await Event.create({
-    type: "weather",
-    severity: data.main.temp > 30 ? 3 : 1,
-    location: { lat: +lat, lng: +lng },
-    data: {
-      temp: data.main.temp,
-      wind: data.wind?.speed,
-      description: data.weather?.[0]?.main
-    },
-    source: "openweather"
-  });
-
-  return event;
-}
-
-// LIVE VERSION
-async function fetchWeatherLive({ lat, lng }) {
-  if (!lat || !lng) throw new Error("Missing lat/lng");
-
-  const k = key(lat, lng);
-
-  const cached = get(k);
-  if (cached) return cached;
+// ================= EVENT VERSION (KEEP) =================
+async function fetchWeatherAndCreateEvents({ lat, lng }) { 
+  if (!lat || !lng) { 
+    throw new Error("Missing lat/lng"); 
+  } 
 
   const r = await fetch(
     `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&units=metric&appid=${process.env.OPENWEATHER_KEY}`
-  );
+  ); 
 
-  if (!r.ok) {
-    throw new Error(`Weather API error ${r.status}`);
-  }
+  const data = await r.json(); 
 
-  const data = await r.json();
+  if (!data || !data.main) { 
+    throw new Error("Weather API failed: " + JSON.stringify(data)); 
+  } 
 
-  const result = {
-    temp: data.main.temp,
-    wind: data.wind?.speed,
-    description: data.weather?.[0]?.main
-  };
+  const event = await Event.create({ 
+    type: "weather", 
+    severity: data.main.temp > 30 ? 3 : 1, 
+    location: { 
+      lat: parseFloat(lat), 
+      lng: parseFloat(lng) 
+    }, 
+    data: { 
+      temp: data.main.temp, 
+      wind: data.wind?.speed, 
+      description: data.weather?.[0]?.main 
+    }, 
+    source: "api" 
+  }); 
 
-  set(k, result);
+  return event; 
+} 
 
-  return result;
-}
+// ================= LIVE VERSION (NO DB + CACHE) =================
+async function fetchWeatherLive({ lat, lng }) { 
+  if (!lat || !lng) { 
+    throw new Error("Missing lat/lng"); 
+  } 
 
-module.exports = {
-  fetchWeatherAndCreateEvents,
-  fetchWeatherLive
+  const key = getCacheKey(Number(lat), Number(lng)); 
+
+  // ✅ CHECK CACHE
+  const cached = getCached(key); 
+  if (cached) { 
+    return cached; 
+  } 
+
+  // ✅ FETCH API
+  const r = await fetch(
+    `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&units=metric&appid=${process.env.OPENWEATHER_KEY}`
+  ); 
+
+  const data = await r.json(); 
+
+  if (!data || !data.main) { 
+    throw new Error("Weather API failed: " + JSON.stringify(data)); 
+  } 
+
+  const result = { 
+    temp: data.main.temp, 
+    wind: data.wind?.speed, 
+    description: data.weather?.[0]?.main 
+  }; 
+
+  // ✅ STORE CACHE
+  setCache(key, result); 
+
+  return result; 
+} 
+
+module.exports = { 
+  fetchWeatherAndCreateEvents, 
+  fetchWeatherLive 
 };
